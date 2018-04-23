@@ -1,0 +1,4 @@
+**/*.go
+Makefile
+README.md
+vendor/**

@@ -1,18 +1,20 @@
-GOCMD=go
-GOBUILD=$(GOCMD) build
-GOCLEAN=$(GOCMD) clean
-GOTEST=$(GOCMD) test
-GOGET=$(GOCMD) get
+GO=$(shell which go)
+DOCKER=$(shell which docker)
+COMMIT_ID=$(shell git rev-parse HEAD)
+
 BINARY_NAME=promadapter
+SERVER_PACKAGE=github.com/circonus/promadapter/cmd/server/
 
 all: test build
+promadapter: build
 build:
-	$(GOBUILD) -o $(BINARY_NAME) -v github.com/circonus/promadapter/cmd/server/
+	CGO_ENABLED=0 GOOS=linux $(GO) build -a -installsuffix cgo -o $(BINARY_NAME) -v $(SERVER_PACKAGE)
 test:
-	$(GOTEST) -v ./...
+	$(GO) test -v ./... -cover
 clean:
-	$(GOCLEAN)
+	$(GO) clean
 	rm -f $(BINARY_NAME)
 run:
-	$(GOBUILD) -o $(BINARY_NAME) -v ./...
-	./$(BINARY_NAME)
+	$(GO) run -v $(SERVER_PACKAGE)
+docker: promadapter
+	$(DOCKER) build -t promadapter:$(COMMIT_ID) .
