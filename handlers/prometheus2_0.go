@@ -1,21 +1,49 @@
 package handlers
 
 import (
-	"errors"
-	"fmt"
+	"strconv"
 
+	circfb "github.com/circonus/promadapter/flatbuffer/circonus"
+	flatbuffers "github.com/google/flatbuffers/go"
 	"github.com/labstack/echo"
+	"github.com/pkg/errors"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
 )
+
+func MakeMetric(b *flatbuffers.Builder, promMetric *dto.Metric,
+	accountID, checkName, checkUuid string) (flatbuffers.UOffsetT, error) {
+	// start a new metric
+
+	var (
+		checkNameOffset = b.CreateString(checkName)
+		checkUuidOffset = b.CreateString(checkUuid)
+	)
+
+	circfb.MetricStart(b)
+	// add the timestamp
+	circfb.MetricAddTimestamp(b, uint64(promMetric.GetTimestampMs()))
+	// add the check name
+	circfb.MetricAddCheckName(b, checkNameOffset)
+	// add the check uuid
+	circfb.MetricAddCheckUuid(b, checkUuidOffset)
+	// add the account id
+	aid, err := strconv.ParseInt(accountID, 10, 32)
+	if err != nil {
+		return 0, errors.Wrap(err, "failed to convert account id")
+	}
+	circfb.MetricAddAccountId(b, int32(aid))
+	metric := circfb.MetricEnd(b)
+	return metric, nil
+}
 
 func PrometheusWrite2_0(ctx echo.Context) error {
 	var (
 		// create our prometheus format decoder
 		dec          = expfmt.NewDecoder(ctx.Request().Body, expfmt.Format(ctx.Request().Header.Get("Content-Type")))
 		metricFamily = new(dto.MetricFamily)
-		//		b            = flatbuffers.NewBuilder(0)
-		err error
+		b            = flatbuffers.NewBuilder(0)
+		err          error
 	)
 	// close request body
 	defer ctx.Request().Body.Close()
@@ -27,52 +55,28 @@ func PrometheusWrite2_0(ctx echo.Context) error {
 		return err
 	}
 	ctx.Logger().Debugf("parsed metric-family: %+v\n", metricFamily)
+
+	offsets := []flatbuffers.UOffsetT{}
 	// convert metric and labels to IRONdb format:
 	for _, metric := range metricFamily.Metric {
 		ctx.Logger().Debugf("metric: %+v\n", metric)
-
-		var (
-			timestamp = fmt.Sprintf("%d.%03d", metric.GetTimestampMs()/1000, metric.GetTimestampMs()%1000)
-			// TODO: figure out, must need to go to DB for this??
-			uuid       = "TARGET`MODULE`CIRCONUS_NAME`lower-cased-uuid"
-			name       = metricFamily.GetName()
-			prefix     string
-			rawFmt     = "%s\t%s\t%s\t%s\t%s\t%f\n"
-			metricType = "n"
-			value      float64
-		)
-
-		// set metric type
-		// set value
-		// set format string
-		switch metricFamily.GetType() {
-		case dto.MetricType_COUNTER:
-			value = metric.GetCounter().GetValue()
-			prefix = "M"
-			break
-		case dto.MetricType_GAUGE:
-			prefix = "M"
-			value = metric.GetGauge().GetValue()
-			break
-			// TODO: what is a summary
-			//	case dto.MetricType_SUMMARY:
-			//		prefix = "M"
-			//		value = metric.GetSummary().
-			//		break
-		case dto.MetricType_UNTYPED:
-			prefix = "M"
-			value = metric.GetUntyped().GetValue()
-			break
-		case dto.MetricType_HISTOGRAM:
-			prefix = "H1"
-			// TODO: convert all these buckets to a circ-hist
-			//value = metric.GetHistogram().
-			break
-		default:
-			return errors.New("invalid metric family type")
+		metricOffset, err := MakeMetric(b, metric, ctx.Param("account"),
+			ctx.Param("check_name"), ctx.Param("check_uuid"))
+		if err != nil {
+			// error encoding to flatbuffer
+			return errors.Wrap(err, "failed to encode metric to flatbuffer")
 		}
-		ctx.Logger().Debugf(rawFmt, prefix, timestamp, uuid, name, metricType, value)
+		offsets = append(offsets, metricOffset)
 	}
+
+	circfb.MetricListStart(b)
+	for _, offset := range offsets {
+		circfb.MetricListAddMetrics(b, offset)
+	}
+	metricsList := circfb.MetricListEnd(b)
+	b.Finish(metricsList)
+
+	ctx.Logger().Debugf("output of the flatbuffer: %+v\n", b.FinishedBytes())
 
 	return nil
 }
