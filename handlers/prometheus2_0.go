@@ -11,6 +11,36 @@ import (
 	"github.com/prometheus/common/expfmt"
 )
 
+func MakeMetricList(promMetricFamily *dto.MetricFamily,
+	accountID, checkName, checkUUID string) ([]byte, error) {
+	var (
+		b = flatbuffers.NewBuilder(0)
+	)
+
+	offsets := []flatbuffers.UOffsetT{}
+	// convert metric and labels to IRONdb format:
+	for _, metric := range promMetricFamily.Metric {
+		mOffset, err := MakeMetric(b, metric, accountID, checkName, checkUUID)
+		if err != nil {
+			return []byte{}, errors.Wrap(err,
+				"failed to encode metric to flatbuffer")
+		}
+		offsets = append(offsets, mOffset)
+	}
+	circfb.MetricListStartMetricsVector(b, len(offsets))
+	for _, offset := range offsets {
+		b.PrependUOffsetT(offset)
+	}
+	metricsVec := b.EndVector(len(offsets))
+
+	circfb.MetricListStart(b)
+	circfb.MetricListAddMetrics(b, metricsVec)
+	var metricListOffset = circfb.MetricListEnd(b)
+	b.Finish(metricListOffset)
+
+	return b.FinishedBytes(), nil
+}
+
 func MakeMetric(b *flatbuffers.Builder, promMetric *dto.Metric,
 	accountID, checkName, checkUuid string) (flatbuffers.UOffsetT, error) {
 	// start a new metric
@@ -42,8 +72,8 @@ func PrometheusWrite2_0(ctx echo.Context) error {
 		// create our prometheus format decoder
 		dec          = expfmt.NewDecoder(ctx.Request().Body, expfmt.Format(ctx.Request().Header.Get("Content-Type")))
 		metricFamily = new(dto.MetricFamily)
-		b            = flatbuffers.NewBuilder(0)
 		err          error
+		data         []byte
 	)
 	// close request body
 	defer ctx.Request().Body.Close()
@@ -56,27 +86,15 @@ func PrometheusWrite2_0(ctx echo.Context) error {
 	}
 	ctx.Logger().Debugf("parsed metric-family: %+v\n", metricFamily)
 
-	offsets := []flatbuffers.UOffsetT{}
-	// convert metric and labels to IRONdb format:
-	for _, metric := range metricFamily.Metric {
-		ctx.Logger().Debugf("metric: %+v\n", metric)
-		metricOffset, err := MakeMetric(b, metric, ctx.Param("account"),
-			ctx.Param("check_name"), ctx.Param("check_uuid"))
-		if err != nil {
-			// error encoding to flatbuffer
-			return errors.Wrap(err, "failed to encode metric to flatbuffer")
-		}
-		offsets = append(offsets, metricOffset)
+	data, err = MakeMetricList(metricFamily, ctx.Param("account"),
+		ctx.Param("check_name"), ctx.Param("check_uuid"))
+	if err != nil {
+		ctx.Logger().Errorf("failed to convert to flatbuffer: %s", err.Error())
+		return err
 	}
 
-	circfb.MetricListStart(b)
-	for _, offset := range offsets {
-		circfb.MetricListAddMetrics(b, offset)
-	}
-	metricsList := circfb.MetricListEnd(b)
-	b.Finish(metricsList)
-
-	ctx.Logger().Debugf("output of the flatbuffer: %+v\n", b.FinishedBytes())
+	// call snowth with flatbuffer data
+	ctx.Logger().Debugf("converted flatbuffer: %+v\n", data)
 
 	return nil
 }
