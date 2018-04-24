@@ -11,13 +11,19 @@ import (
 )
 
 var (
+	// the application log level command line flag `-log`
 	appLogLevel logLevel
-	addr        string
-	snowths     snowthAddrFlag
-	commitID    string
-	buildTime   string
+	// the application listen address command line flag `-addr`
+	addr string
+	// the snowth address command line flags `-snowth`
+	snowths snowthAddrFlag
+	// commitID is populated at compile time with -ldflags '-X ...
+	commitID string
+	// buildTime is populated at compile time with -ldflags '-X ...
+	buildTime string
 )
 
+// init - main init function which is used to parse the command line flags
 func init() {
 	flag.StringVar(&addr, "addr", ":8080", "Address for adapter to listen")
 	flag.Var(&appLogLevel, "log", "Log level for adapter")
@@ -25,16 +31,20 @@ func init() {
 	flag.Parse()
 }
 
+// main - main entrypoint for irondb-prometheus-adapter application
 func main() {
+
 	e := echo.New()
 	e.Logger.SetLevel(log.Lvl(appLogLevel))
 
+	// Pre middleware which is applied to all routes; we are using this
+	// to set the initial context with commitID/buildTime and a requestID
 	e.Pre(func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(ctx echo.Context) error {
 			// set the commit id of the build, so we can use that in our handlers
 			ctx.Set("commitID", commitID)
 			ctx.Set("buildTime", buildTime)
-			ctx.Set("requestID", uuid.Must(uuid.NewV4()))
+			ctx.Set("requestID", uuid.NewV4().String())
 			return next(ctx)
 		}
 	})

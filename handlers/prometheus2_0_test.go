@@ -25,7 +25,7 @@ func TestPrometheusWrite2_0(t *testing.T) {
 	e := echo.New()
 	e.POST("/prometheus/2.0/write/:account/:check_uuid/:check_name", PrometheusWrite2_0)
 
-	url := fmt.Sprintf("/prometheus/2.0/write/42/checkname/%s", uuid.Must(uuid.NewV4()))
+	url := fmt.Sprintf("/prometheus/2.0/write/42/checkname/%s", uuid.NewV4().String())
 	r, _ := http.NewRequest("POST", url, bytes.NewBufferString(promUntypedMetric))
 	w := httptest.NewRecorder()
 
@@ -41,7 +41,7 @@ func TestPrometheusRead2_0(t *testing.T) {
 	e := echo.New()
 	e.GET("/prometheus/2.0/read/:account/:check_uuid/:check_name", PrometheusWrite2_0)
 
-	url := fmt.Sprintf("/prometheus/2.0/read/42/checkname/%s", uuid.Must(uuid.NewV4()))
+	url := fmt.Sprintf("/prometheus/2.0/read/42/checkname/%s", uuid.NewV4().String())
 	r, _ := http.NewRequest("GET", url, bytes.NewBufferString(promUntypedMetric))
 	w := httptest.NewRecorder()
 
@@ -66,7 +66,7 @@ func TestMakeMetric(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed to decode prometheus write message: %s", err.Error())
 	}
-	checkUUID := uuid.Must(uuid.NewV4()).String()
+	checkUUID := uuid.NewV4().String()
 	metricOffset, err := MakeMetric(b, metricFamily.Metric[0], "42", "check_name", checkUUID)
 
 	b.Finish(metricOffset)
@@ -102,7 +102,7 @@ func TestMakeMetricList(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed to decode prometheus write message: %s", err.Error())
 	}
-	checkUUID := uuid.Must(uuid.NewV4()).String()
+	checkUUID := uuid.NewV4().String()
 	data, err = MakeMetricList(metricFamily, "42", "check_name", checkUUID)
 
 	// now decode the flatbuffer and see if it looks right
