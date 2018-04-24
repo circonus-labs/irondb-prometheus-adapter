@@ -4,7 +4,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"strconv"
-	"strings"
 
 	circfb "github.com/circonus-labs/irondb-prometheus-adapter/flatbuffer/circonus"
 	flatbuffers "github.com/google/flatbuffers/go"
@@ -68,18 +67,19 @@ func MakeMetric(b *flatbuffers.Builder, promMetric *dto.Metric,
 		// apply the checkName and UUID to the metric
 		checkNameOffset = b.CreateString(checkName)
 		checkUUIDOffset = b.CreateString(checkUUID)
-		streamTags      []string
+		tagOffsets      = []flatbuffers.UOffsetT{}
 	)
-
 	// we need to convert the labels into stream tag format
 	for _, labelPair := range promMetric.GetLabel() {
-		// we need to base64 encode the value of the stream tags
-		streamTags = append(streamTags, fmt.Sprintf(`b"%s":b"%s"`,
+		tagOffsets = append(tagOffsets, b.CreateString(fmt.Sprintf(`b"%s":b"%s"`,
 			labelPair.GetName(),
-			base64.StdEncoding.EncodeToString([]byte(labelPair.GetValue())),
-		))
+			base64.StdEncoding.EncodeToString([]byte(labelPair.GetValue())))))
 	}
-	streamTagOffset := b.CreateString(strings.Join(streamTags, " "))
+	circfb.MetricValueStartStreamTagsVector(b, len(promMetric.GetLabel()))
+	for _, offset := range tagOffsets {
+		b.PrependUOffsetT(offset)
+	}
+	streamTagVec := b.EndVector(len(promMetric.GetLabel()))
 
 	// create the metric value
 	circfb.MetricValueStart(b)
@@ -87,7 +87,7 @@ func MakeMetric(b *flatbuffers.Builder, promMetric *dto.Metric,
 	circfb.MetricValueAddTimestamp(b, uint64(promMetric.GetTimestampMs()))
 	// add name to metric value
 	circfb.MetricValueAddName(b, checkNameOffset)
-	circfb.MetricValueAddStreamTags(b, streamTagOffset)
+	circfb.MetricValueAddStreamTags(b, streamTagVec)
 	value := circfb.MetricValueEnd(b)
 
 	// start a metric
