@@ -30,7 +30,7 @@ func MakeMetricList(promMetricFamily *dto.MetricFamily,
 		// MakeMetric takes in a flatbuffer builder, the metric from
 		// the prometheus metric family and results in an offset for
 		// the metric inserted into the builder
-		mOffset, err := MakeMetric(b, metric, accountID, checkName, checkUUID)
+		mOffset, err := MakeMetric(b, metric, *promMetricFamily.Type, accountID, checkName, checkUUID)
 		if err != nil {
 			return []byte{}, errors.Wrap(err,
 				"failed to encode metric to flatbuffer")
@@ -61,8 +61,16 @@ func MakeMetricList(promMetricFamily *dto.MetricFamily,
 
 // MakeMetric - serialize a prometheus Metric as a flatbuffer resulting
 // in the offset on the builder for the Metric
-func MakeMetric(b *flatbuffers.Builder, promMetric *dto.Metric,
+func MakeMetric(b *flatbuffers.Builder, promMetric *dto.Metric, metricType dto.MetricType,
 	accountID, checkName, checkUUID string) (flatbuffers.UOffsetT, error) {
+
+	// prometheus metric types are as follows:
+	// MetricType_COUNTER   MetricType = 0 -> NNT
+	// MetricType_GAUGE     MetricType = 1 -> NNT
+	// MetricType_SUMMARY   MetricType = 2 -> histogram
+	// MetricType_UNTYPED   MetricType = 3 -> NNT/text?
+	// MetricType_HISTOGRAM MetricType = 4 -> histogram
+
 	var (
 		// apply the checkName and UUID to the metric
 		checkNameOffset = b.CreateString(checkName)
@@ -81,6 +89,14 @@ func MakeMetric(b *flatbuffers.Builder, promMetric *dto.Metric,
 	}
 	streamTagVec := b.EndVector(len(promMetric.GetLabel()))
 
+	// TODO: if metric type is counter/gauge do the below,
+	// if histogram/summary we need to use those union types.
+
+	// create the metric value value
+	circfb.DoubleValueStart(b)
+	circfb.DoubleValueAddValue(b, promMetric.GetUntyped().GetValue())
+	valueValue := circfb.DoubleValueEnd(b)
+
 	// create the metric value
 	circfb.MetricValueStart(b)
 	// add timestamp to metric value
@@ -88,8 +104,11 @@ func MakeMetric(b *flatbuffers.Builder, promMetric *dto.Metric,
 	// add name to metric value
 	circfb.MetricValueAddName(b, checkNameOffset)
 	circfb.MetricValueAddStreamTags(b, streamTagVec)
-	value := circfb.MetricValueEnd(b)
+	// this is the value of the value...
+	circfb.MetricValueAddValueType(b, circfb.MetricValueUnionDoubleValue)
+	circfb.MetricValueAddValue(b, valueValue)
 
+	value := circfb.MetricValueEnd(b)
 	// start a metric
 	circfb.MetricStart(b)
 	// add the timestamp

@@ -26,7 +26,7 @@ func TestMakeMetric(t *testing.T) {
 		t.Errorf("failed to decode prometheus write message: %s", err.Error())
 	}
 	checkUUID := uuid.NewV4().String()
-	metricOffset, err := MakeMetric(b, metricFamily.Metric[0], "42", "check_name", checkUUID)
+	metricOffset, err := MakeMetric(b, metricFamily.Metric[0], *metricFamily.Type, "42", "check_name", checkUUID)
 
 	b.Finish(metricOffset)
 
@@ -93,6 +93,20 @@ func TestMakeMetricList(t *testing.T) {
 		}
 		if checkMetric.Timestamp() != uint64(metricFamily.Metric[0].GetTimestampMs()) {
 			t.Error("invalid account id")
+		}
+		checkValue := new(circfb.MetricValue)
+		checkMetric.Value(checkValue)
+
+		unionTable := new(flatbuffers.Table)
+		if checkValue.Value(unionTable) {
+			unionType := checkValue.ValueType()
+			if unionType == circfb.MetricValueUnionDoubleValue {
+				checkValueValue := new(circfb.DoubleValue)
+				checkValueValue.Init(unionTable.Bytes, unionTable.Pos)
+				if checkValueValue.Value() != 1027 {
+					t.Errorf("Value is not correct in flatbuffer %f\n", checkValueValue.Value())
+				}
+			}
 		}
 	}
 }
