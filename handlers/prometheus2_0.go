@@ -3,7 +3,7 @@ package handlers
 import (
 	"strconv"
 
-	circfb "github.com/circonus/promadapter/flatbuffer/circonus"
+	circfb "github.com/circonus-labs/irondb-prometheus-adapter/flatbuffer/circonus"
 	flatbuffers "github.com/google/flatbuffers/go"
 	"github.com/labstack/echo"
 	"github.com/pkg/errors"

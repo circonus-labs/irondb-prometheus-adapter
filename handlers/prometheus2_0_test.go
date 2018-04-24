@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	circfb "github.com/circonus/promadapter/flatbuffer/circonus"
+	circfb "github.com/circonus-labs/irondb-prometheus-adapter/flatbuffer/circonus"
 	flatbuffers "github.com/google/flatbuffers/go"
 	"github.com/labstack/echo"
 	dto "github.com/prometheus/client_model/go"

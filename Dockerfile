@@ -1,3 +1,3 @@
 FROM scratch
-ADD promadapter /promadapter
-CMD ["/promadapter", "-log", "debug", "-addr", ":8080"]
+ADD irondb-prometheus-adapter /irondb-prometheus-adapter
+CMD ["/irondb-prometheus-adapter", "-log", "debug", "-addr", ":8080"]

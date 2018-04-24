@@ -1,4 +1,5 @@
 .*.sw*
 promadapter
+irondb-prometheus-adapter
 server
 test.out

@@ -1,4 +1,4 @@
-# Promadapter
+# irondb-prometheus-adapter
 
 Prometheus Adapter to IRONdb.
 
@@ -10,8 +10,8 @@ cases:
 
 ```bash
 make clean # clean and remove prior exe
-make build # will build `promadapter` exe
-make docker # will build a docker scratch container with promadapter inside
+make build # will build `irondb-prometheus-adapter` exe
+make docker # will build a docker scratch container with irondb-prometheus-adapter inside
 ```
 
 ## Run
@@ -19,13 +19,13 @@ make docker # will build a docker scratch container with promadapter inside
 After building, you can run in two ways, directly or through docker:
 
 ```bash
-docker run -d -p8080:8080 promadapter:<commit_id>
-# the above will run promadapter in a container
-docker run -p1234:8080 promadapter:860a64f4e9d793beaef25196e36a35da1480d88b /promadapter -addr :1234 -log debug -snowth http:127.0.0.1:8112
+docker run -d -p8080:8080 irondb-prometheus-adapter:<commit_id>
+# the above will run irondb-prometheus-adapter in a container
+docker run -p1234:8080 irondb-prometheus-adapter:860a64f4e9d793beaef25196e36a35da1480d88b /irondb-prometheus-adapter -addr :1234 -log debug -snowth http:127.0.0.1:8112
 # the above shows an example of specifying custom command with non-default args
 
-./promadapter
-# the above will run promadapter outside of a container
+./irondb-prometheus-adapter
+# the above will run irondb-prometheus-adapter outside of a container
 ```
 
 ### Arguments

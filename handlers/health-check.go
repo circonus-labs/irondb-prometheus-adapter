@@ -3,7 +3,7 @@ package handlers
 import (
 	"net/http"
 
-	"github.com/circonus/promadapter/renderings"
+	"github.com/circonus-labs/irondb-prometheus-adapter/renderings"
 	"github.com/labstack/echo"
 )
 

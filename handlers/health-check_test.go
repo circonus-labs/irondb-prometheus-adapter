@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/circonus/promadapter/renderings"
+	"github.com/circonus-labs/irondb-prometheus-adapter/renderings"
 	"github.com/labstack/echo"
 )
 

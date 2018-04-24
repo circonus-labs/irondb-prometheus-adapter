@@ -3,11 +3,11 @@ DOCKER=$(shell which docker)
 COMMIT_ID=$(shell git rev-parse HEAD)
 NOW=$(shell date +%s)
 
-BINARY_NAME=promadapter
-SERVER_PACKAGE=github.com/circonus/promadapter/cmd/server/
+BINARY_NAME=irondb-prometheus-adapter
+SERVER_PACKAGE=github.com/circonus-labs/irondb-prometheus-adapter/cmd/server/
 
 all: test build
-promadapter: build
+irondb-prometheus-adapter: build
 build:
 	$(GO) build -o $(BINARY_NAME) \
 		-ldflags=all='-X "main.commitID=development" -X "main.buildTime=$(NOW)"' \
@@ -25,4 +25,4 @@ docker:
 	CGO_ENABLED=0 GOOS=linux $(GO) build \
 		-ldflags=all='-X "main.commitID=$(COMMIT_ID)" -X "main.buildTime=$(NOW)"' \
 		-a -installsuffix cgo -o $(BINARY_NAME) $(SERVER_PACKAGE)
-	$(DOCKER) build -t promadapter:$(COMMIT_ID) .
+	$(DOCKER) build -t irondb-prometheus-adapter:$(COMMIT_ID) .

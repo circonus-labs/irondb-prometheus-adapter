@@ -47,6 +47,12 @@
   version = "v1.0.0"
 
 [[projects]]
+  name = "github.com/pkg/errors"
+  packages = ["."]
+  revision = "645ef00459ed84a119197bfb8d8205042c6df63d"
+  version = "v0.8.0"
+
+[[projects]]
   branch = "master"
   name = "github.com/prometheus/client_model"
   packages = ["go"]
@@ -61,6 +67,12 @@
     "model"
   ]
   revision = "e5b036cc37a466a0af27d604d1ee500211d16d6a"
+
+[[projects]]
+  name = "github.com/satori/go.uuid"
+  packages = ["."]
+  revision = "f58768cc1a7a7e77a3bd49e98cdd21419399b6a3"
+  version = "v1.2.0"
 
 [[projects]]
   branch = "master"
@@ -92,6 +104,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "daa324a3e91c779f78d0040edfa4b5cf1717ecc573e14183c28a239ce897532b"
+  inputs-digest = "cb703f3f99c673420fadd83558eacca725c205d3880ee68d68cad451478707fd"
   solver-name = "gps-cdcl"
   solver-version = 1
