@@ -8,10 +8,10 @@
   revision = "8eb9a7a20126e4d472b96f225c97de79a275d31e"
 
 [[projects]]
-  branch = "master"
-  name = "github.com/circonus/gosnowth"
+  branch = "raw-submission"
+  name = "github.com/circonus-labs/gosnowth"
   packages = ["."]
-  revision = "ff44198672cc6dbd43db36d09bb1c1f0932e2903"
+  revision = "de65a3a417176278a56072fede87c0b0b31be1fe"
 
 [[projects]]
   name = "github.com/golang/protobuf"

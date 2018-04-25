@@ -30,12 +30,16 @@ func init() {
 	flag.Var(&appLogLevel, "log", "Log level for adapter")
 	flag.Var(&snowths, "snowth", "Snowth node to bootstrap")
 	flag.Parse()
+
+	log.Printf("addr flag: %s", addr)
+	log.Printf("log flag: %s", appLogLevel)
+	log.Printf("snowth flag: %+v", snowths)
 }
 
 // main - main entrypoint for irondb-prometheus-adapter application
 func main() {
 	// startup our gosnowth client
-	snowthClient, err := gosnowth.NewSnowthClient(snowths...)
+	snowthClient, err := gosnowth.NewSnowthClient(false, snowths...)
 	if err != nil {
 		log.Fatalf("failed to start snowth client: %s", err.Error())
 	}

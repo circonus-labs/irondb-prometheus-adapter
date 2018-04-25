@@ -15,18 +15,20 @@ import (
 )
 
 type SnowthClientI interface {
-	WriteRaw(*gosnowth.SnowthNode, io.Reader, bool) error
+	WriteRaw(*gosnowth.SnowthNode, io.Reader, bool, uint64) error
 	ListActiveNodes() []*gosnowth.SnowthNode
+	ListInactiveNodes() []*gosnowth.SnowthNode
 }
 
 type mockSnowthClient struct {
-	mockWriteRaw        func(*gosnowth.SnowthNode, io.Reader, bool) error
-	mockListActiveNodes func() []*gosnowth.SnowthNode
+	mockWriteRaw          func(*gosnowth.SnowthNode, io.Reader, bool, uint64) error
+	mockListActiveNodes   func() []*gosnowth.SnowthNode
+	mockListInactiveNodes func() []*gosnowth.SnowthNode
 }
 
-func (msc *mockSnowthClient) WriteRaw(node *gosnowth.SnowthNode, data io.Reader, fb bool) (err error) {
+func (msc *mockSnowthClient) WriteRaw(node *gosnowth.SnowthNode, data io.Reader, fb bool, numDatapoints uint64) (err error) {
 	if msc.mockWriteRaw != nil {
-		return msc.mockWriteRaw(node, data, fb)
+		return msc.mockWriteRaw(node, data, fb, numDatapoints)
 	}
 	return nil
 }
@@ -34,6 +36,12 @@ func (msc *mockSnowthClient) WriteRaw(node *gosnowth.SnowthNode, data io.Reader,
 func (msc *mockSnowthClient) ListActiveNodes() []*gosnowth.SnowthNode {
 	if msc.mockListActiveNodes != nil {
 		return msc.mockListActiveNodes()
+	}
+	return nil
+}
+func (msc *mockSnowthClient) ListInactiveNodes() []*gosnowth.SnowthNode {
+	if msc.mockListInactiveNodes != nil {
+		return msc.mockListInactiveNodes()
 	}
 	return nil
 }

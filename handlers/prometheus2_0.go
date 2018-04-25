@@ -38,11 +38,15 @@ func PrometheusWrite2_0(ctx echo.Context) error {
 		return err
 	}
 
+	node := getRandomNode(snowthClient.ListActiveNodes()...)
+	if node == nil {
+		// we are degraded, there are no active nodes
+		ctx.Logger().Errorf("there are no active nodes... active: %+v, inactive: %+v\n", snowthClient.ListActiveNodes(), snowthClient.ListInactiveNodes())
+		return errors.New("no active irondb nodes")
+	}
+	ctx.Logger().Debugf("using node: %s of %+v", node.GetURL(), snowthClient.ListActiveNodes())
 	// perform the write to IRONdb
-	if err = snowthClient.WriteRaw(
-		getRandomNode(snowthClient.ListActiveNodes()...),
-		bytes.NewBuffer(data), true); err != nil {
-
+	if err = snowthClient.WriteRaw(node, bytes.NewBuffer(data), true, uint64(len(metricFamily.Metric))); err != nil {
 		ctx.Logger().Errorf("failed to write flatbuffer: %s", err.Error())
 		return errors.Wrap(err, "failed to write flatbuffer")
 	}
