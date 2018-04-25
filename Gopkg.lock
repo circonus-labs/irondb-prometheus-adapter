@@ -2,6 +2,18 @@
 
 
 [[projects]]
+  branch = "master"
+  name = "github.com/circonus-labs/circonusllhist"
+  packages = ["."]
+  revision = "8eb9a7a20126e4d472b96f225c97de79a275d31e"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/circonus/gosnowth"
+  packages = ["."]
+  revision = "ff44198672cc6dbd43db36d09bb1c1f0932e2903"
+
+[[projects]]
   name = "github.com/golang/protobuf"
   packages = ["proto"]
   revision = "925541529c1fa6821df4e44ce2723319eb2be768"
@@ -104,6 +116,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "cb703f3f99c673420fadd83558eacca725c205d3880ee68d68cad451478707fd"
+  inputs-digest = "afc20456a14b1bc0390c87cac43c5567fa62c178c63c0804473ebf795d6d6d75"
   solver-name = "gps-cdcl"
   solver-version = 1

@@ -1,7 +1,10 @@
 package handlers
 
 import (
+	"bytes"
+
 	"github.com/labstack/echo"
+	"github.com/pkg/errors"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
 )
@@ -15,6 +18,7 @@ func PrometheusWrite2_0(ctx echo.Context) error {
 		metricFamily = new(dto.MetricFamily)
 		err          error
 		data         []byte
+		snowthClient = ctx.Get("snowthClient").(SnowthClientI)
 	)
 	// close request body
 	defer ctx.Request().Body.Close()
@@ -32,6 +36,15 @@ func PrometheusWrite2_0(ctx echo.Context) error {
 	if err != nil {
 		ctx.Logger().Errorf("failed to convert to flatbuffer: %s", err.Error())
 		return err
+	}
+
+	// perform the write to IRONdb
+	if err = snowthClient.WriteRaw(
+		getRandomNode(snowthClient.ListActiveNodes()...),
+		bytes.NewBuffer(data), true); err != nil {
+
+		ctx.Logger().Errorf("failed to write flatbuffer: %s", err.Error())
+		return errors.Wrap(err, "failed to write flatbuffer")
 	}
 
 	// call snowth with flatbuffer data

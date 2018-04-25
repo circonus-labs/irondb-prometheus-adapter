@@ -5,6 +5,7 @@ import (
 	"flag"
 
 	"github.com/circonus-labs/irondb-prometheus-adapter/handlers"
+	"github.com/circonus/gosnowth"
 	"github.com/labstack/echo"
 	"github.com/labstack/gommon/log"
 	uuid "github.com/satori/go.uuid"
@@ -33,6 +34,11 @@ func init() {
 
 // main - main entrypoint for irondb-prometheus-adapter application
 func main() {
+	// startup our gosnowth client
+	snowthClient, err := gosnowth.NewSnowthClient(snowths...)
+	if err != nil {
+		log.Fatalf("failed to start snowth client: %s", err.Error())
+	}
 
 	e := echo.New()
 	e.Logger.SetLevel(log.Lvl(appLogLevel))
@@ -41,6 +47,8 @@ func main() {
 	// to set the initial context with commitID/buildTime and a requestID
 	e.Pre(func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(ctx echo.Context) error {
+			// add the snowth client to the base context
+			ctx.Set("snowthClient", snowthClient)
 			// set the commit id of the build, so we can use that in our handlers
 			ctx.Set("commitID", commitID)
 			ctx.Set("buildTime", buildTime)

@@ -3,13 +3,50 @@ package handlers
 import (
 	"encoding/base64"
 	"fmt"
+	"io"
+	"math/rand"
 	"strconv"
 
 	circfb "github.com/circonus-labs/irondb-prometheus-adapter/flatbuffer/circonus"
+	"github.com/circonus/gosnowth"
 	flatbuffers "github.com/google/flatbuffers/go"
 	"github.com/pkg/errors"
 	dto "github.com/prometheus/client_model/go"
 )
+
+type SnowthClientI interface {
+	WriteRaw(*gosnowth.SnowthNode, io.Reader, bool) error
+	ListActiveNodes() []*gosnowth.SnowthNode
+}
+
+type mockSnowthClient struct {
+	mockWriteRaw        func(*gosnowth.SnowthNode, io.Reader, bool) error
+	mockListActiveNodes func() []*gosnowth.SnowthNode
+}
+
+func (msc *mockSnowthClient) WriteRaw(node *gosnowth.SnowthNode, data io.Reader, fb bool) (err error) {
+	if msc.mockWriteRaw != nil {
+		return msc.mockWriteRaw(node, data, fb)
+	}
+	return nil
+}
+
+func (msc *mockSnowthClient) ListActiveNodes() []*gosnowth.SnowthNode {
+	if msc.mockListActiveNodes != nil {
+		return msc.mockListActiveNodes()
+	}
+	return nil
+}
+
+var gen = rand.New(rand.NewSource(2))
+
+func getRandomNode(choices ...*gosnowth.SnowthNode) *gosnowth.SnowthNode {
+	if len(choices) == 0 {
+		return nil
+	}
+	choice := gen.Int() % len(choices)
+	return choices[choice]
+}
 
 // MakeMetricList - given a prometheus MetricFamily pointer, an
 // accountID, checkName and check UUID, generate the Flatbuffer
