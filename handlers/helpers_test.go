@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	circfb "github.com/circonus-labs/irondb-prometheus-adapter/flatbuffer/circonus"
+	circfb "github.com/circonus-labs/irondb-prometheus-adapter/flatbuffer/metrics"
 	flatbuffers "github.com/google/flatbuffers/go"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"

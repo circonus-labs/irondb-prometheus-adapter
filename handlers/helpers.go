@@ -7,7 +7,7 @@ import (
 	"math/rand"
 	"strconv"
 
-	circfb "github.com/circonus-labs/irondb-prometheus-adapter/flatbuffer/circonus"
+	circfb "github.com/circonus-labs/irondb-prometheus-adapter/flatbuffer/metrics"
 	"github.com/circonus/gosnowth"
 	flatbuffers "github.com/google/flatbuffers/go"
 	"github.com/pkg/errors"
@@ -37,7 +37,7 @@ func (msc *mockSnowthClient) ListActiveNodes() []*gosnowth.SnowthNode {
 	if msc.mockListActiveNodes != nil {
 		return msc.mockListActiveNodes()
 	}
-	return nil
+	return []*gosnowth.SnowthNode{new(gosnowth.SnowthNode)}
 }
 func (msc *mockSnowthClient) ListInactiveNodes() []*gosnowth.SnowthNode {
 	if msc.mockListInactiveNodes != nil {
