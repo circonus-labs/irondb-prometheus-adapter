@@ -7,8 +7,8 @@ import (
 	"math/rand"
 	"strconv"
 
+	"github.com/circonus-labs/gosnowth"
 	circfb "github.com/circonus-labs/irondb-prometheus-adapter/flatbuffer/metrics"
-	"github.com/circonus/gosnowth"
 	flatbuffers "github.com/google/flatbuffers/go"
 	"github.com/pkg/errors"
 	dto "github.com/prometheus/client_model/go"

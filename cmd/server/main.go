@@ -4,8 +4,8 @@ package main
 import (
 	"flag"
 
+	"github.com/circonus-labs/gosnowth"
 	"github.com/circonus-labs/irondb-prometheus-adapter/handlers"
-	"github.com/circonus/gosnowth"
 	"github.com/labstack/echo"
 	"github.com/labstack/gommon/log"
 	uuid "github.com/satori/go.uuid"
