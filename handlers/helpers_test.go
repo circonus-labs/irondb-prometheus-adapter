@@ -2,9 +2,6 @@ package handlers
 
 import (
 	"bytes"
-	"encoding/base64"
-	"encoding/hex"
-	"fmt"
 	"strings"
 	"testing"
 
@@ -31,7 +28,7 @@ func TestMakeMetric(t *testing.T) {
 	checkUUID := uuid.NewV4().String()
 	metricOffset, err := MakeMetric(b, metricFamily.Metric[0], *metricFamily.Type, "42", "check_name", checkUUID)
 
-	b.Finish(metricOffset)
+	b.FinishWithFileIdentifier(metricOffset, []byte("CIML"))
 
 	fbData := b.FinishedBytes()
 	// now decode the flatbuffer and see if it looks right
@@ -75,10 +72,6 @@ func TestMakeMetricList(t *testing.T) {
 	}
 	checkUUID := uuid.NewV4().String()
 	data, err = MakeMetricList(metricFamily, "42", "check_name", checkUUID)
-
-	fmt.Printf("bytes: %x\n", data)
-	fmt.Printf("bytes: %s\n", hex.Dump(data))
-	fmt.Printf("bytes: %s\n", base64.StdEncoding.EncodeToString(data))
 
 	// now decode the flatbuffer and see if it looks right
 	checkMetricList := circfb.GetRootAsMetricList(data, 0)

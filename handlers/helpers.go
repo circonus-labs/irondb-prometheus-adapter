@@ -98,8 +98,7 @@ func MakeMetricList(promMetricFamily *dto.MetricFamily,
 	// add our metricsVector to the MetricList
 	circfb.MetricListAddMetrics(b, metricsVec)
 	var metricListOffset = circfb.MetricListEnd(b)
-	b.Finish(metricListOffset)
-
+	b.FinishWithFileIdentifier(metricListOffset, []byte("CIML"))
 	// return the finished serialized bytes
 	return b.FinishedBytes(), nil
 }
