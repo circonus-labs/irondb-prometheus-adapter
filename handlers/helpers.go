@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
+	"time"
 
 	"github.com/circonus-labs/gosnowth"
 	circfb "github.com/circonus-labs/irondb-prometheus-adapter/flatbuffer/metrics"
@@ -89,6 +90,7 @@ func MakeMetricList(promMetricFamily *dto.MetricFamily,
 	for _, offset := range offsets {
 		// add all of the metric offsets to the vector
 		b.PrependUOffsetT(offset)
+
 	}
 	// finish building the vector
 	metricsVec := b.EndVector(len(offsets))
@@ -144,7 +146,12 @@ func MakeMetric(b *flatbuffers.Builder, promMetric *dto.Metric, metricType dto.M
 	// create the metric value
 	circfb.MetricValueStart(b)
 	// add timestamp to metric value
-	circfb.MetricValueAddTimestamp(b, uint64(promMetric.GetTimestampMs()))
+	var timestamp = uint64(promMetric.GetTimestampMs())
+	if promMetric.GetTimestampMs() == 0 {
+		// not here, we should add a timestamp
+		timestamp = uint64(time.Now().UnixNano() / int64(time.Millisecond))
+	}
+	circfb.MetricValueAddTimestamp(b, timestamp)
 	// add name to metric value
 	circfb.MetricValueAddName(b, checkNameOffset)
 	circfb.MetricValueAddStreamTags(b, streamTagVec)
@@ -164,6 +171,10 @@ func MakeMetric(b *flatbuffers.Builder, promMetric *dto.Metric, metricType dto.M
 	// add the account ID to the Metric
 	circfb.MetricAddAccountId(b, accountID)
 	circfb.MetricAddValue(b, value)
+
+	// alignment...
+	b.Prep(1, flatbuffers.SizeInt32)
+	b.PlaceInt32(0)
 	metric := circfb.MetricEnd(b)
 	// return the offset of the metric to the caller
 	return metric, nil

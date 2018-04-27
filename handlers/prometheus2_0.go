@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"bytes"
+	"encoding/hex"
+	"fmt"
 	"net/http"
 
 	"github.com/labstack/echo"
@@ -13,6 +15,8 @@ import (
 // PrometheusWrite2_0 - the application handler which converts a prometheus
 // MetricFamily message to a MetricList for ingestion into IRONdb
 func PrometheusWrite2_0(ctx echo.Context) error {
+	// close request body
+	defer ctx.Request().Body.Close()
 	var (
 		// create our prometheus format decoder
 		dec          = expfmt.NewDecoder(ctx.Request().Body, expfmt.Format(ctx.Request().Header.Get("Content-Type")))
@@ -39,15 +43,13 @@ func PrometheusWrite2_0(ctx echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid check_name in URL")
 	}
 
-	// close request body
-	defer ctx.Request().Body.Close()
-
 	// decode the metrics into the metric family
 	err = dec.Decode(metricFamily)
 	if err != nil {
 		ctx.Logger().Errorf("failed to decode: %s", err.Error())
 		return err
 	}
+
 	ctx.Logger().Debugf("parsed metric-family: %+v\n", metricFamily)
 
 	// make the metric list flatbuffer data
@@ -70,6 +72,7 @@ func PrometheusWrite2_0(ctx echo.Context) error {
 		ctx.Logger().Errorf("failed to write flatbuffer: %s", err.Error())
 		return errors.Wrap(err, "failed to write flatbuffer")
 	}
+	fmt.Println(hex.Dump(data))
 	ctx.Logger().Debugf("converted flatbuffer: %+v\n", data)
 	return nil
 }

@@ -26,3 +26,4 @@ docker:
 		-ldflags=all='-X "main.commitID=$(COMMIT_ID)" -X "main.buildTime=$(NOW)"' \
 		-a -installsuffix cgo -o $(BINARY_NAME) $(SERVER_PACKAGE)
 	$(DOCKER) build -t irondb-prometheus-adapter:$(COMMIT_ID) .
+	$(DOCKER) tag  irondb-prometheus-adapter:$(COMMIT_ID) irondb-prometheus-adapter:latest

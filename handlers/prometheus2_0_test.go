@@ -13,6 +13,7 @@ import (
 
 const (
 	promUntypedMetric = `http_requests_total{method="post",code="200"} 1027 1395066363000
+http_requests_total{method="post",code="200"} 1027 1395066363001
 `
 )
 

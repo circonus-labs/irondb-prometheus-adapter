@@ -79,7 +79,7 @@ func TestMakeMetricList(t *testing.T) {
 	// now decode the flatbuffer and see if it looks right
 	checkMetricList := circfb.GetRootAsMetricList(data, 0)
 
-	if checkMetricList.MetricsLength() != 1 {
+	if checkMetricList.MetricsLength() != 2 {
 		t.Error("should only have one metric for this test")
 	}
 
@@ -94,8 +94,8 @@ func TestMakeMetricList(t *testing.T) {
 		if checkMetric.AccountId() != 42 {
 			t.Error("invalid account id")
 		}
-		if checkMetric.Timestamp() != uint64(metricFamily.Metric[0].GetTimestampMs()) {
-			t.Error("invalid account id")
+		if checkMetric.Timestamp() != uint64(metricFamily.Metric[1].GetTimestampMs()) {
+			t.Error("invalid timestamp")
 		}
 		checkValue := new(circfb.MetricValue)
 		checkMetric.Value(checkValue)
