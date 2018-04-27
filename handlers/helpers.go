@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
-	"strconv"
 
 	"github.com/circonus-labs/gosnowth"
 	circfb "github.com/circonus-labs/irondb-prometheus-adapter/flatbuffer/metrics"
 	flatbuffers "github.com/google/flatbuffers/go"
 	"github.com/pkg/errors"
 	dto "github.com/prometheus/client_model/go"
+	uuid "github.com/satori/go.uuid"
 )
 
 type SnowthClientI interface {
@@ -62,7 +62,7 @@ func getRandomNode(choices ...*gosnowth.SnowthNode) *gosnowth.SnowthNode {
 // This will result in a []byte and error, where the []byte is
 // the corresponding MetricList serialized
 func MakeMetricList(promMetricFamily *dto.MetricFamily,
-	accountID, checkName, checkUUID string) ([]byte, error) {
+	accountID int32, checkName string, checkUUID uuid.UUID) ([]byte, error) {
 	var (
 		// b is the flatbuffer builder used to create the MetricList
 		b = flatbuffers.NewBuilder(0)
@@ -106,7 +106,7 @@ func MakeMetricList(promMetricFamily *dto.MetricFamily,
 // MakeMetric - serialize a prometheus Metric as a flatbuffer resulting
 // in the offset on the builder for the Metric
 func MakeMetric(b *flatbuffers.Builder, promMetric *dto.Metric, metricType dto.MetricType,
-	accountID, checkName, checkUUID string) (flatbuffers.UOffsetT, error) {
+	accountID int32, checkName string, checkUUID uuid.UUID) (flatbuffers.UOffsetT, error) {
 
 	// prometheus metric types are as follows:
 	// MetricType_COUNTER   MetricType = 0 -> NNT
@@ -118,7 +118,7 @@ func MakeMetric(b *flatbuffers.Builder, promMetric *dto.Metric, metricType dto.M
 	var (
 		// apply the checkName and UUID to the metric
 		checkNameOffset = b.CreateString(checkName)
-		checkUUIDOffset = b.CreateString(checkUUID)
+		checkUUIDOffset = b.CreateString(checkUUID.String())
 		tagOffsets      = []flatbuffers.UOffsetT{}
 	)
 	// we need to convert the labels into stream tag format
@@ -161,13 +161,8 @@ func MakeMetric(b *flatbuffers.Builder, promMetric *dto.Metric, metricType dto.M
 	circfb.MetricAddCheckName(b, checkNameOffset)
 	// add the check uuid
 	circfb.MetricAddCheckUuid(b, checkUUIDOffset)
-	// add the account id
-	aid, err := strconv.ParseInt(accountID, 10, 32)
-	if err != nil {
-		return 0, errors.Wrap(err, "failed to convert account id")
-	}
 	// add the account ID to the Metric
-	circfb.MetricAddAccountId(b, int32(aid))
+	circfb.MetricAddAccountId(b, accountID)
 	circfb.MetricAddValue(b, value)
 	metric := circfb.MetricEnd(b)
 	// return the offset of the metric to the caller

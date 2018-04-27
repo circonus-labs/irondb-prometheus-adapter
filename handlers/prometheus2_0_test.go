@@ -31,7 +31,7 @@ func TestPrometheusWrite2_0(t *testing.T) {
 	})
 	e.POST("/prometheus/2.0/write/:account/:check_uuid/:check_name", PrometheusWrite2_0)
 
-	url := fmt.Sprintf("/prometheus/2.0/write/42/checkname/%s", uuid.NewV4().String())
+	url := fmt.Sprintf("/prometheus/2.0/write/42/%s/check_name", uuid.NewV4().String())
 	r, _ := http.NewRequest("POST", url, bytes.NewBufferString(promUntypedMetric))
 	w := httptest.NewRecorder()
 

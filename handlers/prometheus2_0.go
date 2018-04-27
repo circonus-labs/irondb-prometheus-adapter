@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"net/http"
 
 	"github.com/labstack/echo"
 	"github.com/pkg/errors"
@@ -20,6 +21,24 @@ func PrometheusWrite2_0(ctx echo.Context) error {
 		data         []byte
 		snowthClient = ctx.Get("snowthClient").(SnowthClientI)
 	)
+
+	// validation of url parameters
+	accountID, err := ValidateAccountID(ctx)
+	if err != nil {
+		// 400, invalid account id
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid account id in URL")
+	}
+	checkUUID, err := ValidateCheckUUID(ctx)
+	if err != nil {
+		// 400, invalid account id
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid check_uuid in URL")
+	}
+	checkName, err := ValidateCheckName(ctx)
+	if err != nil {
+		// 400, invalid account id
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid check_name in URL")
+	}
+
 	// close request body
 	defer ctx.Request().Body.Close()
 
@@ -31,13 +50,14 @@ func PrometheusWrite2_0(ctx echo.Context) error {
 	}
 	ctx.Logger().Debugf("parsed metric-family: %+v\n", metricFamily)
 
-	data, err = MakeMetricList(metricFamily, ctx.Param("account"),
-		ctx.Param("check_name"), ctx.Param("check_uuid"))
+	// make the metric list flatbuffer data
+	data, err = MakeMetricList(metricFamily, accountID, checkName, checkUUID)
 	if err != nil {
 		ctx.Logger().Errorf("failed to convert to flatbuffer: %s", err.Error())
 		return err
 	}
 
+	// pull a random snowth node from the client to send request to
 	node := getRandomNode(snowthClient.ListActiveNodes()...)
 	if node == nil {
 		// we are degraded, there are no active nodes
@@ -50,10 +70,7 @@ func PrometheusWrite2_0(ctx echo.Context) error {
 		ctx.Logger().Errorf("failed to write flatbuffer: %s", err.Error())
 		return errors.Wrap(err, "failed to write flatbuffer")
 	}
-
-	// call snowth with flatbuffer data
 	ctx.Logger().Debugf("converted flatbuffer: %+v\n", data)
-
 	return nil
 }
 

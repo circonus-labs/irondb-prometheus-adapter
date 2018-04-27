@@ -25,8 +25,10 @@ func TestMakeMetric(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed to decode prometheus write message: %s", err.Error())
 	}
-	checkUUID := uuid.NewV4().String()
-	metricOffset, err := MakeMetric(b, metricFamily.Metric[0], *metricFamily.Type, "42", "check_name", checkUUID)
+	var checkUUID = uuid.NewV4()
+	metricOffset, err := MakeMetric(
+		b, metricFamily.Metric[0], *metricFamily.Type,
+		42, "check_name", checkUUID)
 
 	b.FinishWithFileIdentifier(metricOffset, []byte("CIML"))
 
@@ -37,7 +39,8 @@ func TestMakeMetric(t *testing.T) {
 	if !bytes.Equal(checkMetric.CheckName(), []byte("check_name")) {
 		t.Error("invalid check name")
 	}
-	if !bytes.Equal(checkMetric.CheckUuid(), []byte(checkUUID)) {
+
+	if cUUID := uuid.FromStringOrNil(string(checkMetric.CheckUuid())); !bytes.Equal(cUUID.Bytes(), checkUUID.Bytes()) {
 		t.Error("invalid check uuid")
 	}
 	if checkMetric.AccountId() != 42 {
@@ -70,8 +73,8 @@ func TestMakeMetricList(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed to decode prometheus write message: %s", err.Error())
 	}
-	checkUUID := uuid.NewV4().String()
-	data, err = MakeMetricList(metricFamily, "42", "check_name", checkUUID)
+	checkUUID := uuid.NewV4()
+	data, err = MakeMetricList(metricFamily, 42, "check_name", checkUUID)
 
 	// now decode the flatbuffer and see if it looks right
 	checkMetricList := circfb.GetRootAsMetricList(data, 0)
@@ -85,7 +88,7 @@ func TestMakeMetricList(t *testing.T) {
 		if !bytes.Equal(checkMetric.CheckName(), []byte("check_name")) {
 			t.Error("invalid check name")
 		}
-		if !bytes.Equal(checkMetric.CheckUuid(), []byte(checkUUID)) {
+		if cUUID := uuid.FromStringOrNil(string(checkMetric.CheckUuid())); !bytes.Equal(cUUID.Bytes(), checkUUID.Bytes()) {
 			t.Error("invalid check uuid")
 		}
 		if checkMetric.AccountId() != 42 {
