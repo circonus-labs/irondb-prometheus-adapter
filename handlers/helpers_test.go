@@ -28,7 +28,7 @@ func TestMakeMetric(t *testing.T) {
 	var checkUUID = uuid.NewV4()
 	metricOffset, err := MakeMetric(
 		b, metricFamily.Metric[0], *metricFamily.Type,
-		42, "check_name", checkUUID)
+		42, "check_name", checkUUID, "metric_name")
 
 	b.FinishWithFileIdentifier(metricOffset, []byte("CIML"))
 

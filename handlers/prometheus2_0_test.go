@@ -13,8 +13,12 @@ import (
 
 const (
 	promUntypedMetric = `http_requests_total{method="post",code="200"} 1027 1395066363000
-http_requests_total{method="post",code="200"} 1027 1395066363001
-`
+	http_requests_total{method="post",code="200"} 1027 1395066363001
+	`
+	//promUntypedMetric = `# HELP go_goroutines Number of goroutines that currently exist.
+//# TYPE go_goroutines gauge
+//go_goroutines 34
+//`
 )
 
 func TestPrometheusWrite2_0(t *testing.T) {

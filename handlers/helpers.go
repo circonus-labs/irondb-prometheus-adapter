@@ -76,7 +76,7 @@ func MakeMetricList(promMetricFamily *dto.MetricFamily,
 		// MakeMetric takes in a flatbuffer builder, the metric from
 		// the prometheus metric family and results in an offset for
 		// the metric inserted into the builder
-		mOffset, err := MakeMetric(b, metric, *promMetricFamily.Type, accountID, checkName, checkUUID)
+		mOffset, err := MakeMetric(b, metric, *promMetricFamily.Type, accountID, checkName, checkUUID, promMetricFamily.GetName())
 		if err != nil {
 			return []byte{}, errors.Wrap(err,
 				"failed to encode metric to flatbuffer")
@@ -100,6 +100,7 @@ func MakeMetricList(promMetricFamily *dto.MetricFamily,
 	// add our metricsVector to the MetricList
 	circfb.MetricListAddMetrics(b, metricsVec)
 	var metricListOffset = circfb.MetricListEnd(b)
+
 	b.FinishWithFileIdentifier(metricListOffset, []byte("CIML"))
 	// return the finished serialized bytes
 	return b.FinishedBytes(), nil
@@ -108,7 +109,7 @@ func MakeMetricList(promMetricFamily *dto.MetricFamily,
 // MakeMetric - serialize a prometheus Metric as a flatbuffer resulting
 // in the offset on the builder for the Metric
 func MakeMetric(b *flatbuffers.Builder, promMetric *dto.Metric, metricType dto.MetricType,
-	accountID int32, checkName string, checkUUID uuid.UUID) (flatbuffers.UOffsetT, error) {
+	accountID int32, checkName string, checkUUID uuid.UUID, metricName string) (flatbuffers.UOffsetT, error) {
 
 	// prometheus metric types are as follows:
 	// MetricType_COUNTER   MetricType = 0 -> NNT
@@ -119,9 +120,10 @@ func MakeMetric(b *flatbuffers.Builder, promMetric *dto.Metric, metricType dto.M
 
 	var (
 		// apply the checkName and UUID to the metric
-		checkNameOffset = b.CreateString(checkName)
-		checkUUIDOffset = b.CreateString(checkUUID.String())
-		tagOffsets      = []flatbuffers.UOffsetT{}
+		metricNameOffset = b.CreateString(metricName)
+		checkNameOffset  = b.CreateString(checkName)
+		checkUUIDOffset  = b.CreateString(checkUUID.String())
+		tagOffsets       = []flatbuffers.UOffsetT{}
 	)
 	// we need to convert the labels into stream tag format
 	for _, labelPair := range promMetric.GetLabel() {
@@ -151,9 +153,10 @@ func MakeMetric(b *flatbuffers.Builder, promMetric *dto.Metric, metricType dto.M
 		// not here, we should add a timestamp
 		timestamp = uint64(time.Now().UnixNano() / int64(time.Millisecond))
 	}
+
 	circfb.MetricValueAddTimestamp(b, timestamp)
 	// add name to metric value
-	circfb.MetricValueAddName(b, checkNameOffset)
+	circfb.MetricValueAddName(b, metricNameOffset)
 	circfb.MetricValueAddStreamTags(b, streamTagVec)
 	// this is the value of the value...
 	circfb.MetricValueAddValueType(b, circfb.MetricValueUnionDoubleValue)
@@ -162,8 +165,6 @@ func MakeMetric(b *flatbuffers.Builder, promMetric *dto.Metric, metricType dto.M
 	value := circfb.MetricValueEnd(b)
 	// start a metric
 	circfb.MetricStart(b)
-	// add the timestamp
-	circfb.MetricAddTimestamp(b, uint64(promMetric.GetTimestampMs()))
 	// add the check name
 	circfb.MetricAddCheckName(b, checkNameOffset)
 	// add the check uuid
@@ -171,11 +172,17 @@ func MakeMetric(b *flatbuffers.Builder, promMetric *dto.Metric, metricType dto.M
 	// add the account ID to the Metric
 	circfb.MetricAddAccountId(b, accountID)
 	circfb.MetricAddValue(b, value)
+	circfb.MetricAddTimestamp(b, timestamp)
 
+	fid := []byte("CIMM")
 	// alignment...
-	b.Prep(1, flatbuffers.SizeInt32)
-	b.PlaceInt32(0)
+	b.Prep(flatbuffers.SizeInt32+4, 0)
+	for i := 4 - 1; i >= 0; i-- {
+		// place the file identifier
+		b.PlaceByte(fid[i])
+	}
 	metric := circfb.MetricEnd(b)
+
 	// return the offset of the metric to the caller
 	return metric, nil
 }
