@@ -1,7 +1,5 @@
 package flatbuffers
 
-import "fmt"
-
 // Builder is a state machine for creating FlatBuffer objects.
 // Use a Builder to construct object(s) starting from leaf nodes.
 //
@@ -545,12 +543,11 @@ func (b *Builder) Slot(slotnum int) {
 	b.vtable[slotnum] = UOffsetT(b.Offset())
 }
 
-// FinishWithFileIdentifier - finalizes a buffer, pointing to the given
-// `rootTable` as well as applies a file identifier to the header
+// FinishWithFileIdentifier finalizes a buffer, pointing to the given `rootTable`.
+// as well as applys a file identifier
 func (b *Builder) FinishWithFileIdentifier(rootTable UOffsetT, fid []byte) {
 	if fid == nil || len(fid) != fileIdentifierLength {
-		panic(fmt.Sprintf(
-			"file identifier must be length %d", fileIdentifierLength))
+		panic("incorrect file identifier length")
 	}
 	// In order to add a file identifier to the flatbuffer message, we need
 	// to prepare an alignment and file identifier length

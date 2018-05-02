@@ -11,7 +11,7 @@ import (
 	circfb "github.com/circonus-labs/irondb-prometheus-adapter/flatbuffer/metrics"
 	flatbuffers "github.com/google/flatbuffers/go"
 	"github.com/pkg/errors"
-	dto "github.com/prometheus/client_model/go"
+	"github.com/prometheus/prometheus/prompb"
 	uuid "github.com/satori/go.uuid"
 )
 
@@ -62,7 +62,7 @@ func getRandomNode(choices ...*gosnowth.SnowthNode) *gosnowth.SnowthNode {
 // serialized message that is to be sent to the IRONdb api.
 // This will result in a []byte and error, where the []byte is
 // the corresponding MetricList serialized
-func MakeMetricList(promMetricFamily *dto.MetricFamily,
+func MakeMetricList(timeseries []*prompb.TimeSeries,
 	accountID int32, checkName string, checkUUID uuid.UUID) ([]byte, error) {
 	var (
 		// b is the flatbuffer builder used to create the MetricList
@@ -71,19 +71,21 @@ func MakeMetricList(promMetricFamily *dto.MetricFamily,
 		offsets = []flatbuffers.UOffsetT{}
 	)
 
-	// convert metric and labels to IRONdb format:
-	for _, metric := range promMetricFamily.Metric {
-		// MakeMetric takes in a flatbuffer builder, the metric from
-		// the prometheus metric family and results in an offset for
-		// the metric inserted into the builder
-		mOffset, err := MakeMetric(b, metric, *promMetricFamily.Type, accountID, checkName, checkUUID, promMetricFamily.GetName())
-		if err != nil {
-			return []byte{}, errors.Wrap(err,
-				"failed to encode metric to flatbuffer")
+	for _, ts := range timeseries {
+		// convert metric and labels to IRONdb format:
+		for _, sample := range ts.GetSamples() {
+			// MakeMetric takes in a flatbuffer builder, the metric from
+			// the prometheus metric family and results in an offset for
+			// the metric inserted into the builder
+			mOffset, err := MakeMetric(b, ts.GetLabels(), sample, accountID, checkName, checkUUID)
+			if err != nil {
+				return []byte{}, errors.Wrap(err,
+					"failed to encode metric to flatbuffer")
+			}
+			// keep track of all of the metric offsets so we can build the
+			// MetricList Metrics Vector
+			offsets = append(offsets, mOffset)
 		}
-		// keep track of all of the metric offsets so we can build the
-		// MetricList Metrics Vector
-		offsets = append(offsets, mOffset)
 	}
 	// create a metrics vector
 	circfb.MetricListStartMetricsVector(b, len(offsets))
@@ -108,8 +110,8 @@ func MakeMetricList(promMetricFamily *dto.MetricFamily,
 
 // MakeMetric - serialize a prometheus Metric as a flatbuffer resulting
 // in the offset on the builder for the Metric
-func MakeMetric(b *flatbuffers.Builder, promMetric *dto.Metric, metricType dto.MetricType,
-	accountID int32, checkName string, checkUUID uuid.UUID, metricName string) (flatbuffers.UOffsetT, error) {
+func MakeMetric(b *flatbuffers.Builder, labels []*prompb.Label, sample *prompb.Sample,
+	accountID int32, checkName string, checkUUID uuid.UUID) (flatbuffers.UOffsetT, error) {
 
 	// prometheus metric types are as follows:
 	// MetricType_COUNTER   MetricType = 0 -> NNT
@@ -120,36 +122,40 @@ func MakeMetric(b *flatbuffers.Builder, promMetric *dto.Metric, metricType dto.M
 
 	var (
 		// apply the checkName and UUID to the metric
-		metricNameOffset = b.CreateString(metricName)
-		checkNameOffset  = b.CreateString(checkName)
-		checkUUIDOffset  = b.CreateString(checkUUID.String())
-		tagOffsets       = []flatbuffers.UOffsetT{}
+		metricName      = ""
+		checkNameOffset = b.CreateString(checkName)
+		checkUUIDOffset = b.CreateString(checkUUID.String())
+		tagOffsets      = []flatbuffers.UOffsetT{}
 	)
 	// we need to convert the labels into stream tag format
-	for _, labelPair := range promMetric.GetLabel() {
+	for _, label := range labels {
+		if label.GetName() == "__name__" {
+			metricName = label.GetValue()
+		}
 		tagOffsets = append(tagOffsets, b.CreateString(fmt.Sprintf(`b"%s":b"%s"`,
-			labelPair.GetName(),
-			base64.StdEncoding.EncodeToString([]byte(labelPair.GetValue())))))
+			label.GetName(),
+			base64.StdEncoding.EncodeToString([]byte(label.GetValue())))))
 	}
-	circfb.MetricValueStartStreamTagsVector(b, len(promMetric.GetLabel()))
+	metricNameOffset := b.CreateString(metricName)
+	circfb.MetricValueStartStreamTagsVector(b, len(labels))
 	for _, offset := range tagOffsets {
 		b.PrependUOffsetT(offset)
 	}
-	streamTagVec := b.EndVector(len(promMetric.GetLabel()))
+	streamTagVec := b.EndVector(len(labels))
 
 	// TODO: if metric type is counter/gauge do the below,
 	// if histogram/summary we need to use those union types.
 
 	// create the metric value value
 	circfb.DoubleValueStart(b)
-	circfb.DoubleValueAddValue(b, promMetric.GetUntyped().GetValue())
+	circfb.DoubleValueAddValue(b, sample.GetValue())
 	valueValue := circfb.DoubleValueEnd(b)
 
 	// create the metric value
 	circfb.MetricValueStart(b)
 	// add timestamp to metric value
-	var timestamp = uint64(promMetric.GetTimestampMs())
-	if promMetric.GetTimestampMs() == 0 {
+	var timestamp = uint64(sample.GetTimestamp())
+	if timestamp == 0 {
 		// not here, we should add a timestamp
 		timestamp = uint64(time.Now().UnixNano() / int64(time.Millisecond))
 	}
