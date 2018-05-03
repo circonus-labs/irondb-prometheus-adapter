@@ -6,24 +6,46 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
+	"github.com/gogo/protobuf/proto"
+	"github.com/golang/snappy"
 	"github.com/labstack/echo"
+	"github.com/prometheus/prometheus/prompb"
 	uuid "github.com/satori/go.uuid"
-)
-
-const (
-	promUntypedMetric = `http_requests_total{method="post",code="200"} 1027 1395066363000
-	http_requests_total{method="post",code="200"} 1027 1395066363001
-	`
-	//promUntypedMetric = `# HELP go_goroutines Number of goroutines that currently exist.
-//# TYPE go_goroutines gauge
-//go_goroutines 34
-//`
 )
 
 func TestPrometheusWrite2_0(t *testing.T) {
 	// setup echo bits
 	e := echo.New()
+
+	promMsg := prompb.WriteRequest{
+		Timeseries: []*prompb.TimeSeries{
+			&prompb.TimeSeries{
+				Samples: []*prompb.Sample{
+					&prompb.Sample{
+						Timestamp: int64(time.Now().Unix()),
+						Value:     42,
+					},
+				},
+				Labels: []*prompb.Label{
+					&prompb.Label{
+						Name: "label-name", Value: "label-value",
+					},
+				},
+			},
+		},
+	}
+
+	data, err := proto.Marshal(&promMsg)
+	if err != nil {
+		t.Error("failed to marshal prompb message: ", err.Error())
+	}
+	var postBody []byte
+	postBody = snappy.Encode(nil, data)
+	if err != nil {
+		t.Error("failed to compress prompb message: ", err.Error())
+	}
 
 	// mock snowth client
 	snowthClient := new(mockSnowthClient)
@@ -37,7 +59,7 @@ func TestPrometheusWrite2_0(t *testing.T) {
 	e.POST("/prometheus/2.0/write/:account/:check_uuid/:check_name", PrometheusWrite2_0)
 
 	url := fmt.Sprintf("/prometheus/2.0/write/42/%s/check_name", uuid.NewV4().String())
-	r, _ := http.NewRequest("POST", url, bytes.NewBufferString(promUntypedMetric))
+	r, _ := http.NewRequest("POST", url, bytes.NewBuffer(postBody))
 	w := httptest.NewRecorder()
 
 	e.ServeHTTP(w, r)

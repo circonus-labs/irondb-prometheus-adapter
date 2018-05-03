@@ -2,84 +2,48 @@ package handlers
 
 import (
 	"bytes"
-	"strings"
 	"testing"
+	"time"
 
 	circfb "github.com/circonus-labs/irondb-prometheus-adapter/flatbuffer/metrics"
 	flatbuffers "github.com/google/flatbuffers/go"
-	dto "github.com/prometheus/client_model/go"
-	"github.com/prometheus/common/expfmt"
+	"github.com/prometheus/prometheus/prompb"
 	uuid "github.com/satori/go.uuid"
 )
 
 func TestMakeMetric(t *testing.T) {
 	var (
-		b            = flatbuffers.NewBuilder(0)
-		dec          = expfmt.NewDecoder(bytes.NewBufferString(promUntypedMetric), "plain/text")
-		metricFamily = new(dto.MetricFamily)
-		err          error
+		req       prompb.WriteRequest
+		checkUUID = uuid.NewV4()
+		timestamp = int64(time.Now().Unix())
 	)
 
-	// decode the metrics into the metric family
-	err = dec.Decode(metricFamily)
+	req.Timeseries = []*prompb.TimeSeries{
+		&prompb.TimeSeries{
+			Samples: []*prompb.Sample{
+				&prompb.Sample{
+					Timestamp: timestamp,
+					Value:     42,
+				},
+			},
+			Labels: []*prompb.Label{
+				&prompb.Label{
+					Name: "label-name", Value: "label-value",
+				},
+			},
+		},
+	}
+
+	metricListBytes, err := MakeMetricList(
+		req.GetTimeseries(), 42, "check_name", checkUUID)
 	if err != nil {
-		t.Errorf("failed to decode prometheus write message: %s", err.Error())
+		t.Error("error making metric list: ", err.Error())
 	}
-	var checkUUID = uuid.NewV4()
-	metricOffset, err := MakeMetric(
-		b, metricFamily.Metric[0], *metricFamily.Type,
-		42, "check_name", checkUUID, "metric_name")
-
-	b.FinishWithFileIdentifier(metricOffset, []byte("CIML"))
-
-	fbData := b.FinishedBytes()
-	// now decode the flatbuffer and see if it looks right
-	checkMetric := circfb.GetRootAsMetric(fbData, 0)
-
-	if !bytes.Equal(checkMetric.CheckName(), []byte("check_name")) {
-		t.Error("invalid check name")
-	}
-
-	if cUUID := uuid.FromStringOrNil(string(checkMetric.CheckUuid())); !bytes.Equal(cUUID.Bytes(), checkUUID.Bytes()) {
-		t.Error("invalid check uuid")
-	}
-	if checkMetric.AccountId() != 42 {
-		t.Error("invalid account id")
-	}
-	if checkMetric.Timestamp() != uint64(metricFamily.Metric[0].GetTimestampMs()) {
-		t.Error("invalid account id")
-	}
-	checkValue := new(circfb.MetricValue)
-	if value := checkMetric.Value(checkValue); value != nil {
-		for i := 0; i < value.StreamTagsLength(); i++ {
-			checkTags := value.StreamTags(i)
-			if !strings.Contains(string(checkTags), ":") {
-				t.Error("invalid stream tag format")
-			}
-		}
-	}
-}
-
-func TestMakeMetricList(t *testing.T) {
-	var (
-		dec          = expfmt.NewDecoder(bytes.NewBufferString(promUntypedMetric), "plain/text")
-		metricFamily = new(dto.MetricFamily)
-		err          error
-		data         []byte
-	)
-
-	// decode the metrics into the metric family
-	err = dec.Decode(metricFamily)
-	if err != nil {
-		t.Errorf("failed to decode prometheus write message: %s", err.Error())
-	}
-	checkUUID := uuid.NewV4()
-	data, err = MakeMetricList(metricFamily, 42, "check_name", checkUUID)
 
 	// now decode the flatbuffer and see if it looks right
-	checkMetricList := circfb.GetRootAsMetricList(data, 0)
+	checkMetricList := circfb.GetRootAsMetricList(metricListBytes, 0)
 
-	if checkMetricList.MetricsLength() != 2 {
+	if checkMetricList.MetricsLength() != 1 {
 		t.Error("should only have one metric for this test")
 	}
 
@@ -94,7 +58,7 @@ func TestMakeMetricList(t *testing.T) {
 		if checkMetric.AccountId() != 42 {
 			t.Error("invalid account id")
 		}
-		if checkMetric.Timestamp() != uint64(metricFamily.Metric[1].GetTimestampMs()) {
+		if checkMetric.Timestamp() != uint64(timestamp) {
 			t.Error("invalid timestamp")
 		}
 		checkValue := new(circfb.MetricValue)
@@ -106,7 +70,7 @@ func TestMakeMetricList(t *testing.T) {
 			if unionType == circfb.MetricValueUnionDoubleValue {
 				checkValueValue := new(circfb.DoubleValue)
 				checkValueValue.Init(unionTable.Bytes, unionTable.Pos)
-				if checkValueValue.Value() != 1027 {
+				if checkValueValue.Value() != 42 {
 					t.Errorf("Value is not correct in flatbuffer %f\n", checkValueValue.Value())
 				}
 			}
