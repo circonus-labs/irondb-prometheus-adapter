@@ -136,6 +136,10 @@ func MakeMetric(b *flatbuffers.Builder, labels []*prompb.Label, sample *prompb.S
 			label.GetName(),
 			base64.StdEncoding.EncodeToString([]byte(label.GetValue())))))
 	}
+	// add check_uuid as a tag
+	tagOffsets = append(tagOffsets, b.CreateString(fmt.Sprintf(`b"%s":b"%s"`,
+		"__check_uuid", checkUUID.String())))
+
 	metricNameOffset := b.CreateString(metricName)
 	circfb.MetricValueStartStreamTagsVector(b, len(labels))
 	for _, offset := range tagOffsets {
