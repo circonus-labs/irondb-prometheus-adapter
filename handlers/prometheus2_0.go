@@ -1,104 +1,93 @@
 package handlers
 
 import (
-	"strconv"
+	"bytes"
+	"encoding/hex"
+	"fmt"
+	"io/ioutil"
+	"net/http"
 
-	circfb "github.com/circonus-labs/irondb-prometheus-adapter/flatbuffer/circonus"
-	flatbuffers "github.com/google/flatbuffers/go"
+	"github.com/golang/protobuf/proto"
+	"github.com/golang/snappy"
 	"github.com/labstack/echo"
 	"github.com/pkg/errors"
-	dto "github.com/prometheus/client_model/go"
-	"github.com/prometheus/common/expfmt"
+	"github.com/prometheus/prometheus/prompb"
 )
 
-func MakeMetricList(promMetricFamily *dto.MetricFamily,
-	accountID, checkName, checkUUID string) ([]byte, error) {
-	var (
-		b = flatbuffers.NewBuilder(0)
-	)
-
-	offsets := []flatbuffers.UOffsetT{}
-	// convert metric and labels to IRONdb format:
-	for _, metric := range promMetricFamily.Metric {
-		mOffset, err := MakeMetric(b, metric, accountID, checkName, checkUUID)
-		if err != nil {
-			return []byte{}, errors.Wrap(err,
-				"failed to encode metric to flatbuffer")
-		}
-		offsets = append(offsets, mOffset)
-	}
-	circfb.MetricListStartMetricsVector(b, len(offsets))
-	for _, offset := range offsets {
-		b.PrependUOffsetT(offset)
-	}
-	metricsVec := b.EndVector(len(offsets))
-
-	circfb.MetricListStart(b)
-	circfb.MetricListAddMetrics(b, metricsVec)
-	var metricListOffset = circfb.MetricListEnd(b)
-	b.Finish(metricListOffset)
-
-	return b.FinishedBytes(), nil
-}
-
-func MakeMetric(b *flatbuffers.Builder, promMetric *dto.Metric,
-	accountID, checkName, checkUuid string) (flatbuffers.UOffsetT, error) {
-	// start a new metric
-
-	var (
-		checkNameOffset = b.CreateString(checkName)
-		checkUuidOffset = b.CreateString(checkUuid)
-	)
-
-	circfb.MetricStart(b)
-	// add the timestamp
-	circfb.MetricAddTimestamp(b, uint64(promMetric.GetTimestampMs()))
-	// add the check name
-	circfb.MetricAddCheckName(b, checkNameOffset)
-	// add the check uuid
-	circfb.MetricAddCheckUuid(b, checkUuidOffset)
-	// add the account id
-	aid, err := strconv.ParseInt(accountID, 10, 32)
-	if err != nil {
-		return 0, errors.Wrap(err, "failed to convert account id")
-	}
-	circfb.MetricAddAccountId(b, int32(aid))
-	metric := circfb.MetricEnd(b)
-	return metric, nil
-}
-
+// PrometheusWrite2_0 - the application handler which converts a prometheus
+// MetricFamily message to a MetricList for ingestion into IRONdb
 func PrometheusWrite2_0(ctx echo.Context) error {
-	var (
-		// create our prometheus format decoder
-		dec          = expfmt.NewDecoder(ctx.Request().Body, expfmt.Format(ctx.Request().Header.Get("Content-Type")))
-		metricFamily = new(dto.MetricFamily)
-		err          error
-		data         []byte
-	)
 	// close request body
 	defer ctx.Request().Body.Close()
-
-	// decode the metrics into the metric family
-	err = dec.Decode(metricFamily)
+	var (
+		// create our prometheus format decoder
+		err          error
+		snowthClient = ctx.Get("snowthClient").(SnowthClientI)
+	)
+	// validation of url parameters
+	accountID, err := ValidateAccountID(ctx)
 	if err != nil {
-		ctx.Logger().Errorf("failed to decode: %s", err.Error())
-		return err
+		// 400, invalid account id
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid account id in URL")
 	}
-	ctx.Logger().Debugf("parsed metric-family: %+v\n", metricFamily)
+	checkUUID, err := ValidateCheckUUID(ctx)
+	if err != nil {
+		// 400, invalid account id
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid check_uuid in URL")
+	}
+	checkName, err := ValidateCheckName(ctx)
+	if err != nil {
+		// 400, invalid account id
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid check_name in URL")
+	}
 
-	data, err = MakeMetricList(metricFamily, ctx.Param("account"),
-		ctx.Param("check_name"), ctx.Param("check_uuid"))
+	// pull the body off of the request into a byte slice
+	compressed, err := ioutil.ReadAll(ctx.Request().Body)
+	if err != nil {
+		ctx.Logger().Errorf("failed to read request body: %s", err.Error())
+		return echo.NewHTTPError(http.StatusBadRequest, "could not read request body")
+	}
+
+	reqBuf, err := snappy.Decode(nil, compressed)
+	if err != nil {
+		ctx.Logger().Errorf("failed to decompress request body: %s", err.Error())
+		return echo.NewHTTPError(http.StatusBadRequest, "failed to decode request body")
+	}
+
+	var req prompb.WriteRequest
+	if err := proto.Unmarshal(reqBuf, &req); err != nil {
+		ctx.Logger().Errorf("failed to decode protobuf request: %s", err.Error())
+		return echo.NewHTTPError(http.StatusBadRequest, "failed to decode request body")
+	}
+
+	// make the metric list flatbuffer data
+	metricList, err := MakeMetricList(req.GetTimeseries(), accountID, checkName, checkUUID)
 	if err != nil {
 		ctx.Logger().Errorf("failed to convert to flatbuffer: %s", err.Error())
 		return err
 	}
 
-	// call snowth with flatbuffer data
-	ctx.Logger().Debugf("converted flatbuffer: %+v\n", data)
-
+	// pull a random snowth node from the client to send request to
+	node := getRandomNode(snowthClient.ListActiveNodes()...)
+	if node == nil {
+		// we are degraded, there are no active nodes
+		ctx.Logger().Errorf("there are no active nodes... active: %+v, inactive: %+v\n", snowthClient.ListActiveNodes(), snowthClient.ListInactiveNodes())
+		return errors.New("no active irondb nodes")
+	}
+	ctx.Logger().Debugf("using node: %s of %+v", node.GetURL(), snowthClient.ListActiveNodes())
+	fmt.Println(hex.Dump(metricList))
+	// perform the write to IRONdb
+	if err = snowthClient.WriteRaw(node, bytes.NewBuffer(metricList), true, uint64(len(req.GetTimeseries()))); err != nil {
+		ctx.Logger().Errorf("failed to write flatbuffer: %s", err.Error())
+		return errors.Wrap(err, "failed to write flatbuffer")
+	}
+	ctx.Logger().Debugf("converted flatbuffer: %+v\n", metricList)
 	return nil
 }
 
+// PrometheusRead2_0 - the application handler which converts a prometheus
+// read message to an IRONdb read message, and returns the results converted
+// back into prometheus output
 func PrometheusRead2_0(ctx echo.Context) error {
 	return nil
 }

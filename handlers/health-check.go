@@ -7,6 +7,8 @@ import (
 	"github.com/labstack/echo"
 )
 
+// HealthCheck - this is the health check handler, which informs about the
+// health of the service.  Also includes important build information
 func HealthCheck(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, renderings.HealthCheckResponse{
 		Message:   "Success",
