@@ -12,30 +12,28 @@ import (
 	"github.com/labstack/echo"
 	"github.com/pkg/errors"
 	"github.com/prometheus/prometheus/prompb"
+	uuid "github.com/satori/go.uuid"
 )
 
-// PrometheusWrite2_0 - the application handler which converts a prometheus
-// MetricFamily message to a MetricList for ingestion into IRONdb
-func PrometheusWrite2_0(ctx echo.Context) error {
+func handleRequest(ctx echo.Context, req proto.Message, accountID *int32, checkName *string, checkUUID *uuid.UUID) error {
 	// close request body
 	defer ctx.Request().Body.Close()
 	var (
 		// create our prometheus format decoder
-		err          error
-		snowthClient = ctx.Get("snowthClient").(SnowthClientI)
+		err error
 	)
 	// validation of url parameters
-	accountID, err := ValidateAccountID(ctx)
+	*accountID, err = ValidateAccountID(ctx)
 	if err != nil {
 		// 400, invalid account id
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid account id in URL")
 	}
-	checkUUID, err := ValidateCheckUUID(ctx)
+	*checkUUID, err = ValidateCheckUUID(ctx)
 	if err != nil {
 		// 400, invalid account id
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid check_uuid in URL")
 	}
-	checkName, err := ValidateCheckName(ctx)
+	*checkName, err = ValidateCheckName(ctx)
 	if err != nil {
 		// 400, invalid account id
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid check_name in URL")
@@ -54,10 +52,29 @@ func PrometheusWrite2_0(ctx echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "failed to decode request body")
 	}
 
-	var req prompb.WriteRequest
-	if err := proto.Unmarshal(reqBuf, &req); err != nil {
+	if err := proto.Unmarshal(reqBuf, req); err != nil {
 		ctx.Logger().Errorf("failed to decode protobuf request: %s", err.Error())
 		return echo.NewHTTPError(http.StatusBadRequest, "failed to decode request body")
+	}
+	return nil
+}
+
+// PrometheusWrite2_0 - the application handler which converts a prometheus
+// MetricFamily message to a MetricList for ingestion into IRONdb
+func PrometheusWrite2_0(ctx echo.Context) error {
+	// decode, read and deserialize the prometheus request
+	var (
+		req          prompb.WriteRequest
+		accountID    int32
+		checkName    string
+		checkUUID    uuid.UUID
+		snowthClient SnowthClientI
+	)
+	if client, ok := ctx.Get("snowthClient").(SnowthClientI); ok {
+		snowthClient = client
+	}
+	if err := handleRequest(ctx, &req, &accountID, &checkName, &checkUUID); err != nil {
+		return err
 	}
 
 	// make the metric list flatbuffer data
@@ -89,5 +106,47 @@ func PrometheusWrite2_0(ctx echo.Context) error {
 // read message to an IRONdb read message, and returns the results converted
 // back into prometheus output
 func PrometheusRead2_0(ctx echo.Context) error {
+	// decode, read and deserialize the prometheus request
+	var (
+		req          prompb.ReadRequest
+		resp         prompb.ReadResponse
+		accountID    int32
+		checkName    string
+		checkUUID    uuid.UUID
+		snowthClient SnowthClientI
+	)
+	if client, ok := ctx.Get("snowthClient").(SnowthClientI); ok {
+		snowthClient = client
+	}
+	if err := handleRequest(ctx, &req, &accountID, &checkName, &checkUUID); err != nil {
+		return err
+	}
+	// pull a random snowth node from the client to send request to
+	node := getRandomNode(snowthClient.ListActiveNodes()...)
+	if node == nil {
+		// we are degraded, there are no active nodes
+		ctx.Logger().Errorf("there are no active nodes... active: %+v, inactive: %+v\n", snowthClient.ListActiveNodes(), snowthClient.ListInactiveNodes())
+		return errors.New("no active irondb nodes")
+	}
+	ctx.Logger().Debugf("using node: %s of %+v", node.GetURL(), snowthClient.ListActiveNodes())
+
+	// TODO: perform the read...
+
+	data, err := proto.Marshal(&resp)
+	if err != nil {
+		ctx.Logger().Errorf("failed to marshal response: %s", err.Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to marshal response")
+	}
+
+	ctx.Response().Header().Set("Content-Type", "application/x-protobuf")
+	ctx.Response().Header().Set("Content-Encoding", "snappy")
+	ctx.Response().WriteHeader(http.StatusOK)
+
+	var compressed = snappy.Encode(nil, data)
+	if _, err := ctx.Response().Write(compressed); err != nil {
+		ctx.Logger().Errorf("failed to write response: %s", err.Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to write response")
+	}
+
 	return nil
 }

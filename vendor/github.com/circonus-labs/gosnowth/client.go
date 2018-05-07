@@ -126,7 +126,7 @@ func NewSnowthClient(discover bool, addrs ...string) (*SnowthClient, error) {
 		// this works by pulling the topology information for given nodes
 		// and adding nodes discovered within the topology into the client
 		if err := sc.discoverNodes(); err != nil {
-			return nil, errors.Wrap(err, "failed to discover nodes")
+			log.Printf("failed to perform discovery of new nodes")
 		}
 	}
 
