@@ -47,10 +47,10 @@
   revision = "553a641470496b2327abcac10b36396bd98e45c9"
 
 [[projects]]
+  branch = "master"
   name = "github.com/google/flatbuffers"
   packages = ["go"]
-  revision = "20a400e940634108bad812f571582eeffc728eac"
-  version = "v1.9.0"
+  revision = "bed19a5340c12fda7e03d0abe0f34304a3e27590"
 
 [[projects]]
   name = "github.com/grpc-ecosystem/grpc-gateway"
@@ -212,6 +212,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "acb646fe203174cd1616b608f5422bde012908bda0478104bc1b78dbeb27663e"
+  inputs-digest = "b2b7db75672b8ccc817250c4d09222dac59547216a51433b919e91656bca63a6"
   solver-name = "gps-cdcl"
   solver-version = 1

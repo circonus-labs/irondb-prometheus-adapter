@@ -16,8 +16,6 @@ import (
 )
 
 func handleRequest(ctx echo.Context, req proto.Message, accountID *int32, checkName *string, checkUUID *uuid.UUID) error {
-	// close request body
-	defer ctx.Request().Body.Close()
 	var (
 		// create our prometheus format decoder
 		err error
@@ -38,6 +36,12 @@ func handleRequest(ctx echo.Context, req proto.Message, accountID *int32, checkN
 		// 400, invalid account id
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid check_name in URL")
 	}
+
+	if ctx.Request().Body == nil {
+		// 400, invalid account id
+		return echo.NewHTTPError(http.StatusBadRequest, "request requires a body")
+	}
+	defer ctx.Request().Body.Close()
 
 	// pull the body off of the request into a byte slice
 	compressed, err := ioutil.ReadAll(ctx.Request().Body)
@@ -64,7 +68,7 @@ func handleRequest(ctx echo.Context, req proto.Message, accountID *int32, checkN
 func PrometheusWrite2_0(ctx echo.Context) error {
 	// decode, read and deserialize the prometheus request
 	var (
-		req          prompb.WriteRequest
+		req          = new(prompb.WriteRequest)
 		accountID    int32
 		checkName    string
 		checkUUID    uuid.UUID
@@ -73,7 +77,7 @@ func PrometheusWrite2_0(ctx echo.Context) error {
 	if client, ok := ctx.Get("snowthClient").(SnowthClientI); ok {
 		snowthClient = client
 	}
-	if err := handleRequest(ctx, &req, &accountID, &checkName, &checkUUID); err != nil {
+	if err := handleRequest(ctx, req, &accountID, &checkName, &checkUUID); err != nil {
 		return err
 	}
 
@@ -108,8 +112,8 @@ func PrometheusWrite2_0(ctx echo.Context) error {
 func PrometheusRead2_0(ctx echo.Context) error {
 	// decode, read and deserialize the prometheus request
 	var (
-		req          prompb.ReadRequest
-		resp         prompb.ReadResponse
+		req          = new(prompb.ReadRequest)
+		resp         = new(prompb.ReadResponse)
 		accountID    int32
 		checkName    string
 		checkUUID    uuid.UUID
@@ -118,7 +122,7 @@ func PrometheusRead2_0(ctx echo.Context) error {
 	if client, ok := ctx.Get("snowthClient").(SnowthClientI); ok {
 		snowthClient = client
 	}
-	if err := handleRequest(ctx, &req, &accountID, &checkName, &checkUUID); err != nil {
+	if err := handleRequest(ctx, req, &accountID, &checkName, &checkUUID); err != nil {
 		return err
 	}
 	// pull a random snowth node from the client to send request to
@@ -132,7 +136,7 @@ func PrometheusRead2_0(ctx echo.Context) error {
 
 	// TODO: perform the read...
 
-	data, err := proto.Marshal(&resp)
+	data, err := proto.Marshal(resp)
 	if err != nil {
 		ctx.Logger().Errorf("failed to marshal response: %s", err.Error())
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to marshal response")

@@ -103,6 +103,9 @@ func MakeMetricList(timeseries []*prompb.TimeSeries,
 	circfb.MetricListAddMetrics(b, metricsVec)
 	var metricListOffset = circfb.MetricListEnd(b)
 
+	b.Prep(flatbuffers.SizeInt32, 0)
+	b.PlaceInt32(0)
+
 	b.FinishWithFileIdentifier(metricListOffset, []byte("CIML"))
 	// return the finished serialized bytes
 	return b.FinishedBytes(), nil
