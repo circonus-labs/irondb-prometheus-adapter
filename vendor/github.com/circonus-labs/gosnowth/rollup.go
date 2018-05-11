@@ -19,8 +19,6 @@ func (rv *RollupValues) UnmarshalJSON(b []byte) error {
 	json.Unmarshal(b, &tt)
 	if len(tt) < 2 { // error not enough fields
 		return fmt.Errorf("rollup value should contain two entries, %d given in payload", len(tt))
-	} else if len(tt) > 2 { // error too many fields
-		return fmt.Errorf("rollup value should contain two entries, %d given in payload", len(tt))
 	}
 	return nil
 }

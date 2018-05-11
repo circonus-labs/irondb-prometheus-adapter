@@ -8,10 +8,10 @@
   revision = "5eb751da55c6d3091faf3861ec5062ae91fee9d0"
 
 [[projects]]
-  branch = "find-tags"
+  branch = "master"
   name = "github.com/circonus-labs/gosnowth"
   packages = ["."]
-  revision = "d46b13aa7b535e6886b9ca11cc1a08ccf470949d"
+  revision = "27444b8216c201dffa70f779a378220f91d728f3"
 
 [[projects]]
   name = "github.com/gogo/protobuf"
@@ -94,12 +94,6 @@
   packages = ["."]
   revision = "645ef00459ed84a119197bfb8d8205042c6df63d"
   version = "v0.8.0"
-
-[[projects]]
-  branch = "master"
-  name = "github.com/prometheus/common"
-  packages = ["model"]
-  revision = "d811d2e9bf898806ecfb6ef6296774b13ffc314c"
 
 [[projects]]
   name = "github.com/prometheus/prometheus"
@@ -218,6 +212,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "5df95f8988e12843f85a8f21bb0194b5875ca13bbb5e45c4115362cbdbf5899d"
+  inputs-digest = "55f2931a2394d8d3a1fdd7cf0dcd45430d1ed8c04f2c598845d5a3d07ce74ad5"
   solver-name = "gps-cdcl"
   solver-version = 1
