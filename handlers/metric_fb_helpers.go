@@ -3,59 +3,14 @@ package handlers
 import (
 	"encoding/base64"
 	"fmt"
-	"io"
-	"math/rand"
 	"time"
 
-	"github.com/circonus-labs/gosnowth"
 	circfb "github.com/circonus-labs/irondb-prometheus-adapter/flatbuffer/metrics"
 	flatbuffers "github.com/google/flatbuffers/go"
 	"github.com/pkg/errors"
 	"github.com/prometheus/prometheus/prompb"
 	uuid "github.com/satori/go.uuid"
 )
-
-type SnowthClientI interface {
-	WriteRaw(*gosnowth.SnowthNode, io.Reader, bool, uint64) error
-	ListActiveNodes() []*gosnowth.SnowthNode
-	ListInactiveNodes() []*gosnowth.SnowthNode
-}
-
-type mockSnowthClient struct {
-	mockWriteRaw          func(*gosnowth.SnowthNode, io.Reader, bool, uint64) error
-	mockListActiveNodes   func() []*gosnowth.SnowthNode
-	mockListInactiveNodes func() []*gosnowth.SnowthNode
-}
-
-func (msc *mockSnowthClient) WriteRaw(node *gosnowth.SnowthNode, data io.Reader, fb bool, numDatapoints uint64) (err error) {
-	if msc.mockWriteRaw != nil {
-		return msc.mockWriteRaw(node, data, fb, numDatapoints)
-	}
-	return nil
-}
-
-func (msc *mockSnowthClient) ListActiveNodes() []*gosnowth.SnowthNode {
-	if msc.mockListActiveNodes != nil {
-		return msc.mockListActiveNodes()
-	}
-	return []*gosnowth.SnowthNode{new(gosnowth.SnowthNode)}
-}
-func (msc *mockSnowthClient) ListInactiveNodes() []*gosnowth.SnowthNode {
-	if msc.mockListInactiveNodes != nil {
-		return msc.mockListInactiveNodes()
-	}
-	return nil
-}
-
-var gen = rand.New(rand.NewSource(2))
-
-func getRandomNode(choices ...*gosnowth.SnowthNode) *gosnowth.SnowthNode {
-	if len(choices) == 0 {
-		return nil
-	}
-	choice := gen.Int() % len(choices)
-	return choices[choice]
-}
 
 // MakeMetricList - given a prometheus MetricFamily pointer, an
 // accountID, checkName and check UUID, generate the Flatbuffer
@@ -105,7 +60,6 @@ func MakeMetricList(timeseries []*prompb.TimeSeries,
 
 	b.Prep(flatbuffers.SizeInt32, 0)
 	b.PlaceInt32(0)
-
 	b.FinishWithFileIdentifier(metricListOffset, []byte("CIML"))
 	// return the finished serialized bytes
 	return b.FinishedBytes(), nil
@@ -130,20 +84,28 @@ func MakeMetric(b *flatbuffers.Builder, labels []*prompb.Label, sample *prompb.S
 		checkUUIDOffset = b.CreateString(checkUUID.String())
 		tagOffsets      = []flatbuffers.UOffsetT{}
 	)
+
+	var STRepr = "|ST["
 	// we need to convert the labels into stream tag format
-	for _, label := range labels {
+	for i, label := range labels {
 		if label.GetName() == "__name__" {
 			metricName = label.GetValue()
 		}
-		tagOffsets = append(tagOffsets, b.CreateString(fmt.Sprintf(`b"%s":b"%s"`,
-			label.GetName(),
-			base64.StdEncoding.EncodeToString([]byte(label.GetValue())))))
-	}
-	// add check_uuid as a tag
-	tagOffsets = append(tagOffsets, b.CreateString(fmt.Sprintf(`b"%s":b"%s"`,
-		"__check_uuid", checkUUID.String())))
+		if i != 0 {
+			STRepr += ","
+		}
+		STRepr += fmt.Sprintf(`b"%s":b"%s"`,
+			base64.StdEncoding.EncodeToString([]byte(label.GetName())),
+			base64.StdEncoding.EncodeToString([]byte(label.GetValue())))
 
-	metricNameOffset := b.CreateString(metricName)
+		tagOffsets = append(tagOffsets, b.CreateString(
+			fmt.Sprintf(`b"%s":b"%s"`,
+				base64.StdEncoding.EncodeToString([]byte(label.GetName())),
+				base64.StdEncoding.EncodeToString([]byte(label.GetValue())))))
+	}
+	STRepr += "]"
+
+	metricNameOffset := b.CreateString(metricName + STRepr)
 	circfb.MetricValueStartStreamTagsVector(b, len(labels))
 	for _, offset := range tagOffsets {
 		b.PrependUOffsetT(offset)
@@ -186,10 +148,9 @@ func MakeMetric(b *flatbuffers.Builder, labels []*prompb.Label, sample *prompb.S
 	circfb.MetricAddAccountId(b, accountID)
 	circfb.MetricAddValue(b, value)
 	circfb.MetricAddTimestamp(b, timestamp)
-
 	fid := []byte("CIMM")
 	// alignment...
-	b.Prep(flatbuffers.SizeInt32+4, 0)
+	b.Prep(4, 0)
 	for i := 4 - 1; i >= 0; i-- {
 		// place the file identifier
 		b.PlaceByte(fid[i])

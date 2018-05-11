@@ -74,7 +74,32 @@ func TestPrometheusRead2_0(t *testing.T) {
 	e := echo.New()
 
 	promMsg := prompb.ReadRequest{
-		Queries: []*prompb.Query{},
+		Queries: []*prompb.Query{
+			&prompb.Query{
+				Matchers: []*prompb.LabelMatcher{
+					&prompb.LabelMatcher{
+						Type:  prompb.LabelMatcher_EQ,
+						Name:  "metric_name",
+						Value: "metric_value",
+					},
+					&prompb.LabelMatcher{
+						Type:  prompb.LabelMatcher_NEQ,
+						Name:  "metric_name",
+						Value: "metric_value",
+					},
+					&prompb.LabelMatcher{
+						Type:  prompb.LabelMatcher_RE,
+						Name:  "metric_name",
+						Value: "metric_value",
+					},
+					&prompb.LabelMatcher{
+						Type:  prompb.LabelMatcher_NRE,
+						Name:  "metric_name",
+						Value: "metric_value",
+					},
+				},
+			},
+		},
 	}
 
 	data, err := proto.Marshal(&promMsg)

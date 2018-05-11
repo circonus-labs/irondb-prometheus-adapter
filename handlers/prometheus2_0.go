@@ -2,11 +2,14 @@ package handlers
 
 import (
 	"bytes"
-	"encoding/hex"
+	"encoding/base64"
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"strings"
+	"time"
 
+	"github.com/circonus-labs/gosnowth"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/snappy"
 	"github.com/labstack/echo"
@@ -15,7 +18,7 @@ import (
 	uuid "github.com/satori/go.uuid"
 )
 
-func handleRequest(ctx echo.Context, req proto.Message, accountID *int32, checkName *string, checkUUID *uuid.UUID) error {
+func handlePromRequest(ctx echo.Context, req proto.Message, accountID *int32, checkName *string, checkUUID *uuid.UUID) error {
 	var (
 		// create our prometheus format decoder
 		err error
@@ -77,7 +80,7 @@ func PrometheusWrite2_0(ctx echo.Context) error {
 	if client, ok := ctx.Get("snowthClient").(SnowthClientI); ok {
 		snowthClient = client
 	}
-	if err := handleRequest(ctx, req, &accountID, &checkName, &checkUUID); err != nil {
+	if err := handlePromRequest(ctx, req, &accountID, &checkName, &checkUUID); err != nil {
 		return err
 	}
 
@@ -96,13 +99,11 @@ func PrometheusWrite2_0(ctx echo.Context) error {
 		return errors.New("no active irondb nodes")
 	}
 	ctx.Logger().Debugf("using node: %s of %+v", node.GetURL(), snowthClient.ListActiveNodes())
-	fmt.Println(hex.Dump(metricList))
 	// perform the write to IRONdb
 	if err = snowthClient.WriteRaw(node, bytes.NewBuffer(metricList), true, uint64(len(req.GetTimeseries()))); err != nil {
 		ctx.Logger().Errorf("failed to write flatbuffer: %s", err.Error())
 		return errors.Wrap(err, "failed to write flatbuffer")
 	}
-	ctx.Logger().Debugf("converted flatbuffer: %+v\n", metricList)
 	return nil
 }
 
@@ -122,7 +123,7 @@ func PrometheusRead2_0(ctx echo.Context) error {
 	if client, ok := ctx.Get("snowthClient").(SnowthClientI); ok {
 		snowthClient = client
 	}
-	if err := handleRequest(ctx, req, &accountID, &checkName, &checkUUID); err != nil {
+	if err := handlePromRequest(ctx, req, &accountID, &checkName, &checkUUID); err != nil {
 		return err
 	}
 	// pull a random snowth node from the client to send request to
@@ -133,9 +134,154 @@ func PrometheusRead2_0(ctx echo.Context) error {
 		return errors.New("no active irondb nodes")
 	}
 	ctx.Logger().Debugf("using node: %s of %+v", node.GetURL(), snowthClient.ListActiveNodes())
+	// convert the read message into a tags snowth query
+	// perform the tags snowth query
+	// take all resulting metrics, and perform a time bound metrics query
+	// convert the results into the response
+	ctx.Logger().Debugf("prometheus query: %+v", req.GetQueries())
+	for _, q := range req.GetQueries() {
+		// foreach query, perform the query and generate a query result
+		var (
+			// for each query we will be making a queryresponse
+			qr             = new(prompb.QueryResult)
+			snowthTagQuery = "and("
+			streamTags     = []string{}
+			responseTags   = map[string]string{}
+		)
+		for i, m := range q.GetMatchers() {
+			// for each of the matchers within the query
+			// take each matcher and formulate a stream tag filter
+			if i > 0 {
+				snowthTagQuery += ","
+			}
 
-	// TODO: perform the read...
+			var (
+				matcherName  = base64.StdEncoding.EncodeToString([]byte(m.GetName()))
+				matcherValue = base64.StdEncoding.EncodeToString([]byte(m.GetValue()))
+			)
 
+			responseTags[m.GetName()] = m.GetValue()
+
+			// based on the matcher type, we need to build out our tag query
+			switch m.Type {
+			case prompb.LabelMatcher_EQ:
+				// query equal
+				tag := fmt.Sprintf(`b"%s":b"%s"`, matcherName, matcherValue)
+				snowthTagQuery = fmt.Sprintf(`%s%s`, snowthTagQuery, tag)
+				streamTags = append(streamTags, tag)
+			case prompb.LabelMatcher_NEQ:
+				// query not equal
+				tag := fmt.Sprintf(`b"%s":b"%s"`, matcherName, matcherValue)
+				snowthTagQuery = fmt.Sprintf(`%snot(%s)`, snowthTagQuery, tag)
+			case prompb.LabelMatcher_RE:
+				// query regular expression
+				tag := fmt.Sprintf(`b"%s":b/%s/`, matcherName, matcherValue)
+				snowthTagQuery = fmt.Sprintf(`%s%s`, snowthTagQuery, tag)
+				streamTags = append(streamTags, tag)
+			case prompb.LabelMatcher_NRE:
+				// query not regular expression
+				tag := fmt.Sprintf(`b"%s":b/%s/`, matcherName, matcherValue)
+				snowthTagQuery = fmt.Sprintf(`%snot(%s)`, snowthTagQuery, tag)
+			}
+		}
+		// close our and(
+		snowthTagQuery += ")"
+
+		var (
+			tagResp []gosnowth.FindTagsItem
+			err     error
+		)
+		ctx.Logger().Debugf("query: %s", snowthTagQuery)
+
+		tagResp, err = snowthClient.FindTags(node, accountID, fmt.Sprintf("and(%s)", strings.Join(streamTags, ",")))
+		if err != nil {
+			ctx.Logger().Errorf("failed to find tags: %s", err.Error())
+			continue
+		}
+
+		/*
+			if metricName != "" {
+				fmt.Printf("%+v\n", tagResp)
+				// metric name we need to call the raw endpoint and pass the stream
+				// tags to the metric
+				if len(tagResp) > 0 {
+					metricName = tagResp[0].MetricName
+				}
+				values, err := snowthClient.ReadRollupValues(
+					node, checkUUID.String(), tagResp[0].MetricName, streamTags, 60*time.Second,
+					time.Unix(0, q.StartTimestampMs*int64(time.Millisecond)),
+					time.Unix(0, q.EndTimestampMs*int64(time.Millisecond)),
+				)
+				if err != nil {
+					// TODO: failure
+					ctx.Logger().Errorf("failed to read rollup: %s", err.Error())
+					continue
+				}
+
+				fmt.Printf("ROLLUP VALUES: %+v\n", values)
+
+				timeSeries := new(prompb.TimeSeries)
+				labelPairs := []*prompb.Label{}
+
+				labelPairs = append(labelPairs, &prompb.Label{
+					Name:  model.MetricNameLabel,
+					Value: strings.Split(metricName, "|ST[")[0],
+				})
+
+				timeSeries.Labels = labelPairs
+				for _, v := range values {
+					// convert value to time series
+					timeSeries.Samples = append(timeSeries.Samples,
+						&prompb.Sample{
+							Value:     v.Value,
+							Timestamp: v.Timestamp,
+						})
+				}
+				qr.Timeseries = append(qr.Timeseries, timeSeries)
+
+			}
+		*/
+
+		for _, t := range tagResp {
+			// for all of our tag responses, grab the rollups
+			values, err := snowthClient.ReadRollupValues(
+				node, checkUUID.String(), t.MetricName, streamTags, 60*time.Second,
+				time.Unix(0, q.StartTimestampMs*int64(time.Millisecond)),
+				time.Unix(0, q.EndTimestampMs*int64(time.Millisecond)),
+			)
+			if err != nil {
+				ctx.Logger().Errorf("failed to read rollup: %s", err.Error())
+				continue
+			}
+
+			timeSeries := new(prompb.TimeSeries)
+			labelPairs := []*prompb.Label{}
+
+			for k, v := range responseTags {
+				labelPairs = append(labelPairs, &prompb.Label{
+					Name:  k,
+					Value: v,
+				})
+			}
+			timeSeries.Labels = labelPairs
+
+			for _, v := range values {
+				// convert value to time series
+				timeSeries.Samples = append(timeSeries.Samples,
+					&prompb.Sample{
+						Value:     v.Value,
+						Timestamp: v.Timestamp,
+					})
+			}
+			// add the timeseries to the query result
+			qr.Timeseries = append(qr.Timeseries, timeSeries)
+
+		}
+		// add this result to our results
+		resp.Results = append(resp.Results, qr)
+	}
+
+	ctx.Logger().Debugf("results: %+v", resp.Results)
 	data, err := proto.Marshal(resp)
 	if err != nil {
 		ctx.Logger().Errorf("failed to marshal response: %s", err.Error())
@@ -151,6 +297,5 @@ func PrometheusRead2_0(ctx echo.Context) error {
 		ctx.Logger().Errorf("failed to write response: %s", err.Error())
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to write response")
 	}
-
 	return nil
 }
