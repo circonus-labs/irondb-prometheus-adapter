@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -123,9 +124,14 @@ func PrometheusRead2_0(ctx echo.Context) error {
 	if client, ok := ctx.Get("snowthClient").(SnowthClientI); ok {
 		snowthClient = client
 	}
+
+	start := time.Now()
 	if err := handlePromRequest(ctx, req, &accountID, &checkName, &checkUUID); err != nil {
 		return err
 	}
+
+	fmt.Printf("!!! Time to handlePromRequest: %v\n", time.Now().Sub(start))
+
 	// pull a random snowth node from the client to send request to
 	node := getRandomNode(snowthClient.ListActiveNodes()...)
 	if node == nil {
@@ -139,6 +145,8 @@ func PrometheusRead2_0(ctx echo.Context) error {
 	// take all resulting metrics, and perform a time bound metrics query
 	// convert the results into the response
 	ctx.Logger().Debugf("prometheus query: %+v", req.GetQueries())
+
+	start = time.Now()
 	for _, q := range req.GetQueries() {
 		// foreach query, perform the query and generate a query result
 		var (
@@ -191,64 +199,44 @@ func PrometheusRead2_0(ctx echo.Context) error {
 			tagResp []gosnowth.FindTagsItem
 			err     error
 		)
-		ctx.Logger().Debugf("query: %s", snowthTagQuery)
 
+		start := time.Now()
 		tagResp, err = snowthClient.FindTags(node, accountID, fmt.Sprintf("and(%s)", strings.Join(streamTags, ",")))
+		ctx.Logger().Debugf("query: %s, duration: %v", fmt.Sprintf("and(%s)", strings.Join(streamTags, ",")), time.Now().Sub(start))
+
 		if err != nil {
 			ctx.Logger().Errorf("failed to find tags: %s", err.Error())
 			continue
 		}
 
-		/*
-			if metricName != "" {
-				fmt.Printf("%+v\n", tagResp)
-				// metric name we need to call the raw endpoint and pass the stream
-				// tags to the metric
-				if len(tagResp) > 0 {
-					metricName = tagResp[0].MetricName
-				}
-				values, err := snowthClient.ReadRollupValues(
-					node, checkUUID.String(), tagResp[0].MetricName, streamTags, 60*time.Second,
-					time.Unix(0, q.StartTimestampMs*int64(time.Millisecond)),
-					time.Unix(0, q.EndTimestampMs*int64(time.Millisecond)),
-				)
-				if err != nil {
-					// TODO: failure
-					ctx.Logger().Errorf("failed to read rollup: %s", err.Error())
-					continue
-				}
-
-				fmt.Printf("ROLLUP VALUES: %+v\n", values)
-
-				timeSeries := new(prompb.TimeSeries)
-				labelPairs := []*prompb.Label{}
-
-				labelPairs = append(labelPairs, &prompb.Label{
-					Name:  model.MetricNameLabel,
-					Value: strings.Split(metricName, "|ST[")[0],
-				})
-
-				timeSeries.Labels = labelPairs
-				for _, v := range values {
-					// convert value to time series
-					timeSeries.Samples = append(timeSeries.Samples,
-						&prompb.Sample{
-							Value:     v.Value,
-							Timestamp: v.Timestamp,
-						})
-				}
-				qr.Timeseries = append(qr.Timeseries, timeSeries)
-
-			}
-		*/
-
+		tagRE := regexp.MustCompile(`\[(.*)\]`)
+		var metricNames = map[string][]string{}
 		for _, t := range tagResp {
+
+			var metricName = ""
+			if v := strings.Split(t.MetricName, "|"); len(v) > 0 {
+				metricName = v[0]
+			}
+
+			metricTags := tagRE.FindStringSubmatch(t.MetricName)
+
+			if metricName != "" && len(metricTags) > 0 {
+				if metricName != "" {
+					metricNames[metricName] = []string{}
+				}
+				metricNames[metricName] = append(metricNames[metricName], metricTags[0])
+			}
+		}
+
+		for k, v := range metricNames {
 			// for all of our tag responses, grab the rollups
+			start := time.Now()
 			values, err := snowthClient.ReadRollupValues(
-				node, checkUUID.String(), t.MetricName, streamTags, 60*time.Second,
+				node, checkUUID.String(), k, streamTags, 60*time.Second,
 				time.Unix(0, q.StartTimestampMs*int64(time.Millisecond)),
 				time.Unix(0, q.EndTimestampMs*int64(time.Millisecond)),
 			)
+			ctx.Logger().Debugf("rollup query: %s, duration: %v", strings.Join(v, ","), time.Now().Sub(start))
 			if err != nil {
 				ctx.Logger().Errorf("failed to read rollup: %s", err.Error())
 				continue
@@ -281,7 +269,8 @@ func PrometheusRead2_0(ctx echo.Context) error {
 		resp.Results = append(resp.Results, qr)
 	}
 
-	ctx.Logger().Debugf("results: %+v", resp.Results)
+	ctx.Logger().Debugf("total read duration: %v", time.Now().Sub(start))
+
 	data, err := proto.Marshal(resp)
 	if err != nil {
 		ctx.Logger().Errorf("failed to marshal response: %s", err.Error())
