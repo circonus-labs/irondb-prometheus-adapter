@@ -130,7 +130,7 @@ func PrometheusRead2_0(ctx echo.Context) error {
 		return err
 	}
 
-	fmt.Printf("!!! Time to handlePromRequest: %v\n", time.Now().Sub(start))
+	ctx.Logger().Debugf("handlePromRequest duration: %v\n", time.Now().Sub(start))
 
 	// pull a random snowth node from the client to send request to
 	node := getRandomNode(snowthClient.ListActiveNodes()...)
