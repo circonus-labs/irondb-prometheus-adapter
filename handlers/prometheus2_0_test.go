@@ -119,11 +119,11 @@ func TestPrometheusRead2_0(t *testing.T) {
 			return next(ctx)
 		}
 	})
-	e.GET("/prometheus/2.0/read/:account/:check_uuid/:check_name", PrometheusRead2_0)
+	e.POST("/prometheus/2.0/read/:account/:check_uuid/:check_name", PrometheusRead2_0)
 
 	url := fmt.Sprintf("/prometheus/2.0/read/42/%s/check_name", uuid.NewV4().String())
 
-	r, _ := http.NewRequest("GET", url, bytes.NewBuffer(postBody))
+	r, _ := http.NewRequest("POST", url, bytes.NewBuffer(postBody))
 	w := httptest.NewRecorder()
 
 	e.ServeHTTP(w, r)

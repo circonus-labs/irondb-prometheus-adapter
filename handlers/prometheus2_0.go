@@ -215,7 +215,7 @@ func PrometheusRead2_0(ctx echo.Context) error {
 
 		start := time.Now()
 		tagResp, err = snowthClient.FindTags(node, prp.accountID, snowthTagQuery.String())
-		ctx.Logger().Debugf("query: %s, duration: %v", fmt.Sprintf("and(%s)", snowthTagQuery.String(), time.Now().Sub(start)))
+		ctx.Logger().Debugf("query: %s, duration: %v", snowthTagQuery.String(), time.Now().Sub(start))
 
 		if err != nil {
 			ctx.Logger().Errorf("failed to find tags: %s", err.Error())
