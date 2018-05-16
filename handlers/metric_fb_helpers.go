@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/base64"
 	"fmt"
+	"strings"
 	"time"
 
 	circfb "github.com/circonus-labs/irondb-prometheus-adapter/flatbuffer/metrics"
@@ -83,29 +84,30 @@ func MakeMetric(b *flatbuffers.Builder, labels []*prompb.Label, sample *prompb.S
 		checkNameOffset = b.CreateString(checkName)
 		checkUUIDOffset = b.CreateString(checkUUID.String())
 		tagOffsets      = []flatbuffers.UOffsetT{}
+		STReprBuilder   strings.Builder
 	)
 
-	var STRepr = "|ST["
+	STReprBuilder.WriteString("|ST[")
 	// we need to convert the labels into stream tag format
 	for i, label := range labels {
 		if label.GetName() == "__name__" {
 			metricName = label.GetValue()
 		}
 		if i != 0 {
-			STRepr += ","
+			STReprBuilder.WriteByte(',')
 		}
-		STRepr += fmt.Sprintf(`b"%s":b"%s"`,
+
+		pair := fmt.Sprintf(`b"%s":b"%s"`,
 			base64.StdEncoding.EncodeToString([]byte(label.GetName())),
 			base64.StdEncoding.EncodeToString([]byte(label.GetValue())))
 
-		tagOffsets = append(tagOffsets, b.CreateString(
-			fmt.Sprintf(`b"%s":b"%s"`,
-				base64.StdEncoding.EncodeToString([]byte(label.GetName())),
-				base64.StdEncoding.EncodeToString([]byte(label.GetValue())))))
-	}
-	STRepr += "]"
+		STReprBuilder.WriteString(pair)
 
-	metricNameOffset := b.CreateString(metricName + STRepr)
+		tagOffsets = append(tagOffsets, b.CreateString(pair))
+	}
+	STReprBuilder.WriteByte(']')
+
+	metricNameOffset := b.CreateString(metricName + STReprBuilder.String())
 	circfb.MetricValueStartStreamTagsVector(b, len(labels))
 	for _, offset := range tagOffsets {
 		b.PrependUOffsetT(offset)

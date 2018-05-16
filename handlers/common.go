@@ -20,7 +20,8 @@ type SnowthClientI interface {
 
 var gen = rand.New(rand.NewSource(2))
 
-func getRandomNode(choices ...*gosnowth.SnowthNode) *gosnowth.SnowthNode {
+func ChooseActiveNode(client SnowthClientI) *gosnowth.SnowthNode {
+	choices := client.ListActiveNodes()
 	if len(choices) == 0 {
 		return nil
 	}

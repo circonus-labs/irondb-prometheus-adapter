@@ -19,31 +19,39 @@ import (
 	uuid "github.com/satori/go.uuid"
 )
 
-func handlePromRequest(ctx echo.Context, req proto.Message, accountID *int32, checkName *string, checkUUID *uuid.UUID) error {
+type promRequestParams struct {
+	accountID int32
+	checkName string
+	checkUUID uuid.UUID
+}
+
+func extractPromRequest(ctx echo.Context, req proto.Message) (promRequestParams, error) {
 	var (
 		// create our prometheus format decoder
 		err error
+		prp = promRequestParams{}
 	)
+
 	// validation of url parameters
-	*accountID, err = ValidateAccountID(ctx)
+	prp.accountID, err = ValidateAccountID(ctx)
 	if err != nil {
 		// 400, invalid account id
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid account id in URL")
+		return prp, echo.NewHTTPError(http.StatusBadRequest, "invalid account id in URL")
 	}
-	*checkUUID, err = ValidateCheckUUID(ctx)
+	prp.checkUUID, err = ValidateCheckUUID(ctx)
 	if err != nil {
 		// 400, invalid account id
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid check_uuid in URL")
+		return prp, echo.NewHTTPError(http.StatusBadRequest, "invalid check_uuid in URL")
 	}
-	*checkName, err = ValidateCheckName(ctx)
+	prp.checkName, err = ValidateCheckName(ctx)
 	if err != nil {
 		// 400, invalid account id
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid check_name in URL")
+		return prp, echo.NewHTTPError(http.StatusBadRequest, "invalid check_name in URL")
 	}
 
 	if ctx.Request().Body == nil {
 		// 400, invalid account id
-		return echo.NewHTTPError(http.StatusBadRequest, "request requires a body")
+		return prp, echo.NewHTTPError(http.StatusBadRequest, "request requires a body")
 	}
 	defer ctx.Request().Body.Close()
 
@@ -51,20 +59,20 @@ func handlePromRequest(ctx echo.Context, req proto.Message, accountID *int32, ch
 	compressed, err := ioutil.ReadAll(ctx.Request().Body)
 	if err != nil {
 		ctx.Logger().Errorf("failed to read request body: %s", err.Error())
-		return echo.NewHTTPError(http.StatusBadRequest, "could not read request body")
+		return prp, echo.NewHTTPError(http.StatusBadRequest, "could not read request body")
 	}
 
 	reqBuf, err := snappy.Decode(nil, compressed)
 	if err != nil {
 		ctx.Logger().Errorf("failed to decompress request body: %s", err.Error())
-		return echo.NewHTTPError(http.StatusBadRequest, "failed to decode request body")
+		return prp, echo.NewHTTPError(http.StatusBadRequest, "failed to decode request body")
 	}
 
 	if err := proto.Unmarshal(reqBuf, req); err != nil {
 		ctx.Logger().Errorf("failed to decode protobuf request: %s", err.Error())
-		return echo.NewHTTPError(http.StatusBadRequest, "failed to decode request body")
+		return prp, echo.NewHTTPError(http.StatusBadRequest, "failed to decode request body")
 	}
-	return nil
+	return prp, nil
 }
 
 // PrometheusWrite2_0 - the application handler which converts a prometheus
@@ -73,27 +81,27 @@ func PrometheusWrite2_0(ctx echo.Context) error {
 	// decode, read and deserialize the prometheus request
 	var (
 		req          = new(prompb.WriteRequest)
-		accountID    int32
-		checkName    string
-		checkUUID    uuid.UUID
+		prp          promRequestParams
+		err          error
 		snowthClient SnowthClientI
 	)
 	if client, ok := ctx.Get("snowthClient").(SnowthClientI); ok {
 		snowthClient = client
 	}
-	if err := handlePromRequest(ctx, req, &accountID, &checkName, &checkUUID); err != nil {
+	if prp, err = extractPromRequest(ctx, req); err != nil {
 		return err
 	}
 
 	// make the metric list flatbuffer data
-	metricList, err := MakeMetricList(req.GetTimeseries(), accountID, checkName, checkUUID)
+	metricList, err := MakeMetricList(
+		req.GetTimeseries(), prp.accountID, prp.checkName, prp.checkUUID)
 	if err != nil {
 		ctx.Logger().Errorf("failed to convert to flatbuffer: %s", err.Error())
 		return err
 	}
 
 	// pull a random snowth node from the client to send request to
-	node := getRandomNode(snowthClient.ListActiveNodes()...)
+	node := ChooseActiveNode(snowthClient)
 	if node == nil {
 		// we are degraded, there are no active nodes
 		ctx.Logger().Errorf("there are no active nodes... active: %+v, inactive: %+v\n", snowthClient.ListActiveNodes(), snowthClient.ListInactiveNodes())
@@ -116,9 +124,8 @@ func PrometheusRead2_0(ctx echo.Context) error {
 	var (
 		req          = new(prompb.ReadRequest)
 		resp         = new(prompb.ReadResponse)
-		accountID    int32
-		checkName    string
-		checkUUID    uuid.UUID
+		prp          promRequestParams
+		err          error
 		snowthClient SnowthClientI
 	)
 	if client, ok := ctx.Get("snowthClient").(SnowthClientI); ok {
@@ -126,14 +133,14 @@ func PrometheusRead2_0(ctx echo.Context) error {
 	}
 
 	start := time.Now()
-	if err := handlePromRequest(ctx, req, &accountID, &checkName, &checkUUID); err != nil {
+	if prp, err = extractPromRequest(ctx, req); err != nil {
 		return err
 	}
 
 	ctx.Logger().Debugf("handlePromRequest duration: %v\n", time.Now().Sub(start))
 
 	// pull a random snowth node from the client to send request to
-	node := getRandomNode(snowthClient.ListActiveNodes()...)
+	node := ChooseActiveNode(snowthClient)
 	if node == nil {
 		// we are degraded, there are no active nodes
 		ctx.Logger().Errorf("there are no active nodes... active: %+v, inactive: %+v\n", snowthClient.ListActiveNodes(), snowthClient.ListInactiveNodes())
@@ -152,15 +159,17 @@ func PrometheusRead2_0(ctx echo.Context) error {
 		var (
 			// for each query we will be making a queryresponse
 			qr             = new(prompb.QueryResult)
-			snowthTagQuery = "and("
+			snowthTagQuery strings.Builder
 			streamTags     = []string{}
 			responseTags   = map[string]string{}
 		)
+
+		snowthTagQuery.WriteString("and(")
 		for i, m := range q.GetMatchers() {
 			// for each of the matchers within the query
 			// take each matcher and formulate a stream tag filter
 			if i > 0 {
-				snowthTagQuery += ","
+				snowthTagQuery.WriteByte(',')
 			}
 
 			var (
@@ -175,25 +184,29 @@ func PrometheusRead2_0(ctx echo.Context) error {
 			case prompb.LabelMatcher_EQ:
 				// query equal
 				tag := fmt.Sprintf(`b"%s":b"%s"`, matcherName, matcherValue)
-				snowthTagQuery = fmt.Sprintf(`%s%s`, snowthTagQuery, tag)
+				snowthTagQuery.WriteString(tag)
 				streamTags = append(streamTags, tag)
 			case prompb.LabelMatcher_NEQ:
 				// query not equal
 				tag := fmt.Sprintf(`b"%s":b"%s"`, matcherName, matcherValue)
-				snowthTagQuery = fmt.Sprintf(`%snot(%s)`, snowthTagQuery, tag)
+				snowthTagQuery.WriteString("not(")
+				snowthTagQuery.WriteString(tag)
+				snowthTagQuery.WriteByte(')')
 			case prompb.LabelMatcher_RE:
 				// query regular expression
 				tag := fmt.Sprintf(`b"%s":b/%s/`, matcherName, matcherValue)
-				snowthTagQuery = fmt.Sprintf(`%s%s`, snowthTagQuery, tag)
+				snowthTagQuery.WriteString(tag)
 				streamTags = append(streamTags, tag)
 			case prompb.LabelMatcher_NRE:
 				// query not regular expression
 				tag := fmt.Sprintf(`b"%s":b/%s/`, matcherName, matcherValue)
-				snowthTagQuery = fmt.Sprintf(`%snot(%s)`, snowthTagQuery, tag)
+				snowthTagQuery.WriteString("not(")
+				snowthTagQuery.WriteString(tag)
+				snowthTagQuery.WriteByte(')')
 			}
 		}
 		// close our and(
-		snowthTagQuery += ")"
+		snowthTagQuery.WriteByte(')')
 
 		var (
 			tagResp []gosnowth.FindTagsItem
@@ -201,8 +214,8 @@ func PrometheusRead2_0(ctx echo.Context) error {
 		)
 
 		start := time.Now()
-		tagResp, err = snowthClient.FindTags(node, accountID, fmt.Sprintf("and(%s)", strings.Join(streamTags, ",")))
-		ctx.Logger().Debugf("query: %s, duration: %v", fmt.Sprintf("and(%s)", strings.Join(streamTags, ",")), time.Now().Sub(start))
+		tagResp, err = snowthClient.FindTags(node, prp.accountID, snowthTagQuery.String())
+		ctx.Logger().Debugf("query: %s, duration: %v", fmt.Sprintf("and(%s)", snowthTagQuery.String(), time.Now().Sub(start)))
 
 		if err != nil {
 			ctx.Logger().Errorf("failed to find tags: %s", err.Error())
@@ -232,11 +245,11 @@ func PrometheusRead2_0(ctx echo.Context) error {
 			// for all of our tag responses, grab the rollups
 			start := time.Now()
 			values, err := snowthClient.ReadRollupValues(
-				node, checkUUID.String(), k, streamTags, 60*time.Second,
+				node, prp.checkUUID.String(), k, streamTags, 60*time.Second,
 				time.Unix(0, q.StartTimestampMs*int64(time.Millisecond)),
 				time.Unix(0, q.EndTimestampMs*int64(time.Millisecond)),
 			)
-			ctx.Logger().Debugf("rollup query: %s, duration: %v", strings.Join(v, ","), time.Now().Sub(start))
+			ctx.Logger().Debugf("rollup query: %s, result length: %d, duration: %v", strings.Join(v, ","), len(values), time.Now().Sub(start))
 			if err != nil {
 				ctx.Logger().Errorf("failed to read rollup: %s", err.Error())
 				continue
