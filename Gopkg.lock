@@ -8,10 +8,9 @@
   revision = "8eb9a7a20126e4d472b96f225c97de79a275d31e"
 
 [[projects]]
-  branch = "raw-submission"
   name = "github.com/circonus-labs/gosnowth"
   packages = ["."]
-  revision = "de65a3a417176278a56072fede87c0b0b31be1fe"
+  revision = "829238157553ee7df7d77d8d17f368a93ac2c342"
 
 [[projects]]
   name = "github.com/gogo/protobuf"
@@ -49,7 +48,6 @@
 [[projects]]
   name = "github.com/google/flatbuffers"
   packages = ["go"]
-  branch = "master"
   revision = "bed19a5340c12fda7e03d0abe0f34304a3e27590"
 
 [[projects]]
@@ -90,32 +88,10 @@
   version = "v0.0.3"
 
 [[projects]]
-  name = "github.com/matttproud/golang_protobuf_extensions"
-  packages = ["pbutil"]
-  revision = "3247c84500bff8d9fb6d579d800f20b3e091582c"
-  version = "v1.0.0"
-
-[[projects]]
   name = "github.com/pkg/errors"
   packages = ["."]
   revision = "645ef00459ed84a119197bfb8d8205042c6df63d"
   version = "v0.8.0"
-
-[[projects]]
-  branch = "master"
-  name = "github.com/prometheus/client_model"
-  packages = ["go"]
-  revision = "99fa1f4be8e564e8a6b613da7fa6f46c9edafc6c"
-
-[[projects]]
-  branch = "master"
-  name = "github.com/prometheus/common"
-  packages = [
-    "expfmt",
-    "internal/bitbucket.org/ww/goautoneg",
-    "model"
-  ]
-  revision = "e5b036cc37a466a0af27d604d1ee500211d16d6a"
 
 [[projects]]
   name = "github.com/prometheus/prometheus"
@@ -234,6 +210,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "f9ec0013ef8dd705b4d9687403a7f52efdc15ee02660fc0df16f50ed1e34f257"
+  inputs-digest = "0965439e69bb8e005630bf56feeb37e8c24565a39bd67901ba2fe7e55fa99eb4"
   solver-name = "gps-cdcl"
   solver-version = 1

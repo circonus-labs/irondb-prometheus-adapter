@@ -27,7 +27,7 @@
 
 [[constraint]]
   name = "github.com/google/flatbuffers"
-  version = "1.9.0"
+  revision = "bed19a5340c12fda7e03d0abe0f34304a3e27590"
 
 [[constraint]]
   name = "github.com/labstack/echo"
@@ -38,12 +38,8 @@
   version = "0.2.4"
 
 [[constraint]]
-  branch = "master"
-  name = "github.com/prometheus/client_model"
-
-[[constraint]]
-  branch = "master"
-  name = "github.com/prometheus/common"
+  name = "github.com/circonus-labs/gosnowth"
+  revision = "829238157553ee7df7d77d8d17f368a93ac2c342"
 
 [prune]
   go-tests = true
