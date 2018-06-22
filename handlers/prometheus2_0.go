@@ -3,6 +3,7 @@ package handlers
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -14,6 +15,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/snappy"
 	"github.com/labstack/echo"
+	"github.com/labstack/gommon/log"
 	"github.com/pkg/errors"
 	"github.com/prometheus/prometheus/prompb"
 	uuid "github.com/satori/go.uuid"
@@ -100,6 +102,11 @@ func PrometheusWrite2_0(ctx echo.Context) error {
 		return err
 	}
 
+	if ctx.Logger().Level() == log.DEBUG {
+		// if we are set to debug dump out the hexdump of the metric list
+		fmt.Println(hex.Dump(metricList))
+	}
+
 	// pull a random snowth node from the client to send request to
 	node := ChooseActiveNode(snowthClient)
 	if node == nil {
@@ -107,7 +114,11 @@ func PrometheusWrite2_0(ctx echo.Context) error {
 		ctx.Logger().Errorf("there are no active nodes... active: %+v, inactive: %+v\n", snowthClient.ListActiveNodes(), snowthClient.ListInactiveNodes())
 		return errors.New("no active irondb nodes")
 	}
-	ctx.Logger().Debugf("using node: %s of %+v", node.GetURL(), snowthClient.ListActiveNodes())
+
+	ctx.Logger().Debugf(
+		"using node: %s of %+v",
+		node.GetURL(), snowthClient.ListActiveNodes())
+
 	// perform the write to IRONdb
 	if err = snowthClient.WriteRaw(node, bytes.NewBuffer(metricList), true, uint64(len(req.GetTimeseries()))); err != nil {
 		ctx.Logger().Errorf("failed to write flatbuffer: %s", err.Error())
