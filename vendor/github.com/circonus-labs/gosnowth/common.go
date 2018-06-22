@@ -5,20 +5,11 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"io"
-	"net/http"
 	"net/url"
 	"strings"
 
 	"github.com/pkg/errors"
 )
-
-// closeBody - helper function given a response it will close the
-// body of the response
-func closeBody(resp *http.Response) {
-	if resp != nil && resp.Body != nil {
-		resp.Body.Close()
-	}
-}
 
 // resolveURL - given a URL and a string reference, it will resolve the
 // address of the URL plus the reference
@@ -94,9 +85,8 @@ func removeNode(a []*SnowthNode, index int) []*SnowthNode {
 }
 
 // decodeJSONFromResponse - given a response decode the body as json
-func decodeJSONFromResponse(v interface{}, resp *http.Response) error {
-	defer closeBody(resp)
-	dec := json.NewDecoder(resp.Body)
+func decodeJSONFromResponse(v interface{}, reader io.Reader) error {
+	dec := json.NewDecoder(reader)
 
 	if err := dec.Decode(v); err != nil {
 		return errors.Wrap(err, "failed to decode response body")
@@ -117,9 +107,8 @@ func encodeXML(v interface{}) (io.Reader, error) {
 }
 
 // decodeXMLFromResponse - Decode the response body as xml
-func decodeXMLFromResponse(v interface{}, resp *http.Response) error {
-	defer closeBody(resp)
-	dec := xml.NewDecoder(resp.Body)
+func decodeXMLFromResponse(v interface{}, reader io.Reader) error {
+	dec := xml.NewDecoder(reader)
 
 	if err := dec.Decode(v); err != nil {
 		return errors.Wrap(err, "failed to decode response body")
