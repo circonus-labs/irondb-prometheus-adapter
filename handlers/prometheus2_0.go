@@ -184,8 +184,18 @@ func PrometheusRead2_0(ctx echo.Context) error {
 			}
 
 			var (
-				matcherName  = base64.StdEncoding.EncodeToString([]byte(m.GetName()))
-				matcherValue = base64.StdEncoding.EncodeToString([]byte(m.GetValue()))
+				name  string = m.GetName()
+				value string = m.GetValue()
+			)
+			if name == "__name__" {
+				name = "__name"
+			}
+
+			var (
+				matcherName = base64.StdEncoding.EncodeToString(
+					[]byte(name))
+				matcherValue = base64.StdEncoding.EncodeToString(
+					[]byte(value))
 			)
 
 			responseTags[m.GetName()] = m.GetValue()

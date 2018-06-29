@@ -89,12 +89,15 @@ func MakeMetric(b *flatbuffers.Builder, labels []*prompb.Label, sample *prompb.S
 
 	STReprBuilder.WriteString("|ST[")
 	// we need to convert the labels into stream tag format
-	for i, label := range labels {
+	first := true
+	for _, label := range labels {
 		if label.GetName() == "__name__" {
 			metricName = label.GetValue()
+			continue
 		}
-		if i != 0 {
+		if !first {
 			STReprBuilder.WriteByte(',')
+			first = false
 		}
 
 		pair := fmt.Sprintf(`b"%s":b"%s"`,
