@@ -2,6 +2,10 @@
 
 Prometheus Adapter to IRONdb.
 
+Requiress IRONdb `>= v0.12.0`.
+
+Also check out our launch [blog post](https://www.circonus.com/2018/06/prometheus-adapter/)!
+
 ## Build
 
 Included is a Makefile which will perform all the build tasks you will need
