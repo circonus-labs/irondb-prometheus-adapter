@@ -63,7 +63,15 @@ func MakeMetricList(timeseries []*prompb.TimeSeries,
 	b.PlaceInt32(0)
 	b.FinishWithFileIdentifier(metricListOffset, []byte("CIML"))
 	// return the finished serialized bytes
-	return b.FinishedBytes(), nil
+	result := b.FinishedBytes()
+
+	if remainder := len(result) % 16; remainder != 0 {
+		for i := 0; i < 16-remainder; i++ {
+			result = append(result, 0)
+		}
+	}
+
+	return result, nil
 }
 
 // MakeMetric - serialize a prometheus Metric as a flatbuffer resulting
@@ -83,8 +91,8 @@ func MakeMetric(b *flatbuffers.Builder, labels []*prompb.Label, sample *prompb.S
 		metricName      = ""
 		checkNameOffset = b.CreateString(checkName)
 		checkUUIDOffset = b.CreateString(checkUUID.String())
-		tagOffsets      = []flatbuffers.UOffsetT{}
-		STReprBuilder   strings.Builder
+		//tagOffsets      = []flatbuffers.UOffsetT{}
+		STReprBuilder strings.Builder
 	)
 
 	STReprBuilder.WriteString("|ST[")
@@ -95,9 +103,10 @@ func MakeMetric(b *flatbuffers.Builder, labels []*prompb.Label, sample *prompb.S
 			metricName = label.GetValue()
 			continue
 		}
-		if !first {
-			STReprBuilder.WriteByte(',')
+		if first {
 			first = false
+		} else {
+			STReprBuilder.WriteByte(',')
 		}
 
 		pair := fmt.Sprintf(`b"%s":b"%s"`,
@@ -106,16 +115,19 @@ func MakeMetric(b *flatbuffers.Builder, labels []*prompb.Label, sample *prompb.S
 
 		STReprBuilder.WriteString(pair)
 
-		tagOffsets = append(tagOffsets, b.CreateString(pair))
+		//tagOffsets = append(tagOffsets, b.CreateString(pair))
 	}
 	STReprBuilder.WriteByte(']')
 
 	metricNameOffset := b.CreateString(metricName + STReprBuilder.String())
-	circfb.MetricValueStartStreamTagsVector(b, len(labels))
-	for _, offset := range tagOffsets {
-		b.PrependUOffsetT(offset)
-	}
-	streamTagVec := b.EndVector(len(labels))
+
+	/*
+		circfb.MetricValueStartStreamTagsVector(b, len(labels))
+		for _, offset := range tagOffsets {
+			b.PrependUOffsetT(offset)
+		}
+		streamTagVec := b.EndVector(len(labels))
+	*/
 
 	// TODO: if metric type is counter/gauge do the below,
 	// if histogram/summary we need to use those union types.
@@ -137,7 +149,7 @@ func MakeMetric(b *flatbuffers.Builder, labels []*prompb.Label, sample *prompb.S
 	circfb.MetricValueAddTimestamp(b, timestamp)
 	// add name to metric value
 	circfb.MetricValueAddName(b, metricNameOffset)
-	circfb.MetricValueAddStreamTags(b, streamTagVec)
+	//circfb.MetricValueAddStreamTags(b, streamTagVec)
 	// this is the value of the value...
 	circfb.MetricValueAddValueType(b, circfb.MetricValueUnionDoubleValue)
 	circfb.MetricValueAddValue(b, valueValue)
@@ -154,7 +166,6 @@ func MakeMetric(b *flatbuffers.Builder, labels []*prompb.Label, sample *prompb.S
 	circfb.MetricAddValue(b, value)
 	circfb.MetricAddTimestamp(b, timestamp)
 	fid := []byte("CIMM")
-	// alignment...
 	b.Prep(4, 0)
 	for i := 4 - 1; i >= 0; i-- {
 		// place the file identifier
