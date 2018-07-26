@@ -115,9 +115,9 @@ func PrometheusWrite2_0(ctx echo.Context) error {
 	// perform the write to IRONdb
 	if err = snowthClient.WriteRaw(node, bytes.NewBuffer(metricList), true, uint64(len(req.GetTimeseries()))); err != nil {
 		id := uuid.NewV4()
-		if strings.Contains(err.Error(), "Bad Request") {
+		if strings.Contains(err.Error(), "Bad Request") || strings.Contains(err.Error(), "400") {
 			if err := ioutil.WriteFile("/tmp/irondb-prometheus-adapter_"+id.String(), metricList, 0644); err != nil {
-				ctx.Logger().Warnf("failed to write metric list data file: %+v", err)
+				ctx.Logger().Warnf("failed to write metric list, data file: %+v", err)
 			}
 			ctx.Logger().Errorf(
 				"failed to write flatbuffer: metriclist written -> /tmp/irondb-prometheus-adapter_%s -> %+v",

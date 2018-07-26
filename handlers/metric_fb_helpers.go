@@ -88,9 +88,7 @@ func MakeMetric(b *flatbuffers.Builder, labels []*prompb.Label, sample *prompb.S
 
 	var (
 		// apply the checkName and UUID to the metric
-		metricName      = ""
-		checkNameOffset = b.CreateString(checkName)
-		checkUUIDOffset = b.CreateString(checkUUID.String())
+		metricName = ""
 		//tagOffsets      = []flatbuffers.UOffsetT{}
 		STReprBuilder strings.Builder
 	)
@@ -119,18 +117,18 @@ func MakeMetric(b *flatbuffers.Builder, labels []*prompb.Label, sample *prompb.S
 	}
 	STReprBuilder.WriteByte(']')
 
-	metricNameOffset := b.CreateString(metricName + STReprBuilder.String())
+	var (
+		metricNameOffset = b.CreateString(metricName + STReprBuilder.String())
+		checkNameOffset  = b.CreateString(checkName)
+		checkUUIDOffset  = b.CreateString(checkUUID.String())
+	)
 
-	/*
-		circfb.MetricValueStartStreamTagsVector(b, len(labels))
-		for _, offset := range tagOffsets {
-			b.PrependUOffsetT(offset)
-		}
-		streamTagVec := b.EndVector(len(labels))
-	*/
-
-	// TODO: if metric type is counter/gauge do the below,
-	// if histogram/summary we need to use those union types.
+	// add timestamp to metric value
+	var timestamp = uint64(sample.GetTimestamp())
+	if timestamp == 0 {
+		// not here, we should add a timestamp
+		timestamp = uint64(time.Now().UnixNano() / int64(time.Millisecond))
+	}
 
 	// create the metric value value
 	circfb.DoubleValueStart(b)
@@ -139,32 +137,24 @@ func MakeMetric(b *flatbuffers.Builder, labels []*prompb.Label, sample *prompb.S
 
 	// create the metric value
 	circfb.MetricValueStart(b)
-	// add timestamp to metric value
-	var timestamp = uint64(sample.GetTimestamp())
-	if timestamp == 0 {
-		// not here, we should add a timestamp
-		timestamp = uint64(time.Now().UnixNano() / int64(time.Millisecond))
-	}
-
 	circfb.MetricValueAddTimestamp(b, timestamp)
-	// add name to metric value
-	circfb.MetricValueAddName(b, metricNameOffset)
-	//circfb.MetricValueAddStreamTags(b, streamTagVec)
-	// this is the value of the value...
 	circfb.MetricValueAddValueType(b, circfb.MetricValueUnionDoubleValue)
 	circfb.MetricValueAddValue(b, valueValue)
-
+	// add name to metric value
+	circfb.MetricValueAddName(b, metricNameOffset)
 	value := circfb.MetricValueEnd(b)
+
 	// start a metric
 	circfb.MetricStart(b)
+	circfb.MetricAddTimestamp(b, timestamp)
+	// add the account ID to the Metric
+	circfb.MetricAddAccountId(b, accountID)
+	circfb.MetricAddValue(b, value)
 	// add the check name
 	circfb.MetricAddCheckName(b, checkNameOffset)
 	// add the check uuid
 	circfb.MetricAddCheckUuid(b, checkUUIDOffset)
-	// add the account ID to the Metric
-	circfb.MetricAddAccountId(b, accountID)
-	circfb.MetricAddValue(b, value)
-	circfb.MetricAddTimestamp(b, timestamp)
+
 	fid := []byte("CIMM")
 	b.Prep(4, 0)
 	for i := 4 - 1; i >= 0; i-- {
