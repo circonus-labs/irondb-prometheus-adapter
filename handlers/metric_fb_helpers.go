@@ -63,7 +63,15 @@ func MakeMetricList(timeseries []*prompb.TimeSeries,
 	b.PlaceInt32(0)
 	b.FinishWithFileIdentifier(metricListOffset, []byte("CIML"))
 	// return the finished serialized bytes
-	return b.FinishedBytes(), nil
+	result := b.FinishedBytes()
+
+	if remainder := len(result) % 16; remainder != 0 {
+		for i := 0; i < 16-remainder; i++ {
+			result = append(result, 0)
+		}
+	}
+
+	return result, nil
 }
 
 // MakeMetric - serialize a prometheus Metric as a flatbuffer resulting
@@ -80,20 +88,22 @@ func MakeMetric(b *flatbuffers.Builder, labels []*prompb.Label, sample *prompb.S
 
 	var (
 		// apply the checkName and UUID to the metric
-		metricName      = ""
-		checkNameOffset = b.CreateString(checkName)
-		checkUUIDOffset = b.CreateString(checkUUID.String())
-		tagOffsets      = []flatbuffers.UOffsetT{}
-		STReprBuilder   strings.Builder
+		metricName = ""
+		//tagOffsets      = []flatbuffers.UOffsetT{}
+		STReprBuilder strings.Builder
 	)
 
 	STReprBuilder.WriteString("|ST[")
 	// we need to convert the labels into stream tag format
-	for i, label := range labels {
+	first := true
+	for _, label := range labels {
 		if label.GetName() == "__name__" {
 			metricName = label.GetValue()
+			continue
 		}
-		if i != 0 {
+		if first {
+			first = false
+		} else {
 			STReprBuilder.WriteByte(',')
 		}
 
@@ -103,19 +113,22 @@ func MakeMetric(b *flatbuffers.Builder, labels []*prompb.Label, sample *prompb.S
 
 		STReprBuilder.WriteString(pair)
 
-		tagOffsets = append(tagOffsets, b.CreateString(pair))
+		//tagOffsets = append(tagOffsets, b.CreateString(pair))
 	}
 	STReprBuilder.WriteByte(']')
 
-	metricNameOffset := b.CreateString(metricName + STReprBuilder.String())
-	circfb.MetricValueStartStreamTagsVector(b, len(labels))
-	for _, offset := range tagOffsets {
-		b.PrependUOffsetT(offset)
-	}
-	streamTagVec := b.EndVector(len(labels))
+	var (
+		metricNameOffset = b.CreateString(metricName + STReprBuilder.String())
+		checkNameOffset  = b.CreateString(checkName)
+		checkUUIDOffset  = b.CreateString(checkUUID.String())
+	)
 
-	// TODO: if metric type is counter/gauge do the below,
-	// if histogram/summary we need to use those union types.
+	// add timestamp to metric value
+	var timestamp = uint64(sample.GetTimestamp())
+	if timestamp == 0 {
+		// not here, we should add a timestamp
+		timestamp = uint64(time.Now().UnixNano() / int64(time.Millisecond))
+	}
 
 	// create the metric value value
 	circfb.DoubleValueStart(b)
@@ -124,34 +137,25 @@ func MakeMetric(b *flatbuffers.Builder, labels []*prompb.Label, sample *prompb.S
 
 	// create the metric value
 	circfb.MetricValueStart(b)
-	// add timestamp to metric value
-	var timestamp = uint64(sample.GetTimestamp())
-	if timestamp == 0 {
-		// not here, we should add a timestamp
-		timestamp = uint64(time.Now().UnixNano() / int64(time.Millisecond))
-	}
-
 	circfb.MetricValueAddTimestamp(b, timestamp)
-	// add name to metric value
-	circfb.MetricValueAddName(b, metricNameOffset)
-	circfb.MetricValueAddStreamTags(b, streamTagVec)
-	// this is the value of the value...
 	circfb.MetricValueAddValueType(b, circfb.MetricValueUnionDoubleValue)
 	circfb.MetricValueAddValue(b, valueValue)
-
+	// add name to metric value
+	circfb.MetricValueAddName(b, metricNameOffset)
 	value := circfb.MetricValueEnd(b)
+
 	// start a metric
 	circfb.MetricStart(b)
+	circfb.MetricAddTimestamp(b, timestamp)
+	// add the account ID to the Metric
+	circfb.MetricAddAccountId(b, accountID)
+	circfb.MetricAddValue(b, value)
 	// add the check name
 	circfb.MetricAddCheckName(b, checkNameOffset)
 	// add the check uuid
 	circfb.MetricAddCheckUuid(b, checkUUIDOffset)
-	// add the account ID to the Metric
-	circfb.MetricAddAccountId(b, accountID)
-	circfb.MetricAddValue(b, value)
-	circfb.MetricAddTimestamp(b, timestamp)
+
 	fid := []byte("CIMM")
-	// alignment...
 	b.Prep(4, 0)
 	for i := 4 - 1; i >= 0; i-- {
 		// place the file identifier
