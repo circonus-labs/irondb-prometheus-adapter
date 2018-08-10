@@ -32,13 +32,17 @@ func (sc *SnowthClient) ReadRollupValues(
 		end_ts   = end.Unix() - end.Unix()%int64(rollup/time.Second) + int64(rollup/time.Second)
 	)
 
-	urlencodedTags := url.QueryEscape(strings.Join(tags, ","))
+	var metricBuilder strings.Builder
+	metricBuilder.WriteString(metric)
+	metricBuilder.WriteString("|ST[")
+	metricBuilder.WriteString(strings.Join(tags, ","))
+	metricBuilder.WriteString("]")
 
 	var (
 		r   = []RollupValues{}
 		err = sc.do(node, "GET", fmt.Sprintf(
-			"%s?stream_tags=%s&start_ts=%d&end_ts=%d&rollup_span=%ds",
-			path.Join("/rollup", id, metric), urlencodedTags, start_ts, end_ts,
+			"%s?start_ts=%d&end_ts=%d&rollup_span=%ds",
+			path.Join("/rollup", id, url.QueryEscape(metricBuilder.String())), start_ts, end_ts,
 			int(rollup/time.Second)), nil, &r, decodeJSONFromResponse)
 	)
 	return r, err

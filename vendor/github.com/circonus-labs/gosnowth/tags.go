@@ -15,10 +15,10 @@ type FindTagsItem struct {
 }
 
 // FindTags - Find metrics that are associated with tags
-func (sc *SnowthClient) FindTags(node *SnowthNode, accountID int32, query string) ([]FindTagsItem, error) {
-	url := fmt.Sprintf("%s?query=%s",
+func (sc *SnowthClient) FindTags(node *SnowthNode, accountID int32, query string, start, end string) ([]FindTagsItem, error) {
+	url := fmt.Sprintf("%s?query=%s&activity_start_secs=%s&activity_end_secs=%s",
 		sc.getURL(node, fmt.Sprintf("/find/%d/tags", accountID)),
-		url.QueryEscape(query),
+		url.QueryEscape(query), url.QueryEscape(start), url.QueryEscape(end),
 	)
 	var (
 		r   = []FindTagsItem{}

@@ -4,14 +4,11 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"net/url"
-	"os"
-	"strings"
 	"sync"
 	"time"
-
-	log "github.com/labstack/gommon/log"
 
 	"github.com/pkg/errors"
 )
@@ -21,7 +18,6 @@ import (
 // and a current topology.  The identifier is how the node is identified within
 // the cluster, and the topology is the current topology that the node falls
 // within.  A topology is a set of nodes that distribute data amoungst each other.
-
 type SnowthNode struct {
 	url             *url.URL
 	identifier      string
@@ -39,6 +35,11 @@ func (sn *SnowthNode) GetURL() *url.URL {
 // node's current topology.
 func (sn *SnowthNode) GetCurrentTopology() string {
 	return sn.currentTopology
+}
+
+// httpClient - interface in order to mock http requests
+type httpClient interface {
+	Do(req *http.Request) (*http.Response, error)
 }
 
 // SnowthClient - The client functionality for operating against SnowthNodes.
@@ -67,7 +68,7 @@ func (sn *SnowthNode) GetCurrentTopology() string {
 // from the nodes.
 //		6.) Lua Extensions APIs
 type SnowthClient struct {
-	c *http.Client
+	c httpClient
 
 	// in order to keep track of healthy nodes within the cluster,
 	// we have two lists of SnowthNode types, active and inactive.
@@ -80,7 +81,6 @@ type SnowthClient struct {
 	// watchInterval is the duration between checks to tell if a node is active
 	// or inactive.
 	watchInterval time.Duration
-	Logger        *log.Logger
 }
 
 // NewSnowthClient - given a variadic addrs parameter, the client will
@@ -89,7 +89,6 @@ type SnowthClient struct {
 // The discover parameter when true will allow the client to discover new
 // nodes from the topology
 func NewSnowthClient(discover bool, addrs ...string) (*SnowthClient, error) {
-
 	sc := &SnowthClient{
 		c:               http.DefaultClient,
 		activeNodesMu:   new(sync.RWMutex),
@@ -97,36 +96,19 @@ func NewSnowthClient(discover bool, addrs ...string) (*SnowthClient, error) {
 		inactiveNodesMu: new(sync.RWMutex),
 		inactiveNodes:   []*SnowthNode{},
 		watchInterval:   5 * time.Second,
-		Logger:          log.New("gosnowth"),
-	}
-
-	var logLevel = os.Getenv("GOSNOWTH_LOGLEVEL")
-	switch strings.ToLower(logLevel) {
-	case "debug":
-		sc.Logger.SetLevel(log.DEBUG)
-	case "info":
-		sc.Logger.SetLevel(log.INFO)
-	case "warn":
-		sc.Logger.SetLevel(log.WARN)
-	case "error":
-		sc.Logger.SetLevel(log.ERROR)
-	default:
-		sc.Logger.SetLevel(log.OFF)
 	}
 
 	// for each of the addrs we need to parse the connection string,
 	// then create a node for that connection string, poll the state
 	// of that node, and populate the identifier and topology of that
 	// node.  Finally we will add the node and activate it.
-	sc.Logger.Info("initializing snowth client")
 	for _, addr := range addrs {
 		url, err := url.Parse(addr)
 		if err != nil {
 			// this node had an error, put on inactive list
-			log.Warnf("failed to bootstrap state of node: %+v", err)
+			log.Printf("failed to bootstrap state of node: %+v", err)
 			continue
 		}
-		sc.Logger.Debugf("creating snowth node: %s", addr)
 		node := &SnowthNode{url: url}
 		// call get state to populate the id of this node
 		state, err := sc.GetNodeState(node)
@@ -135,24 +117,21 @@ func NewSnowthClient(discover bool, addrs ...string) (*SnowthClient, error) {
 			log.Printf("failed to bootstrap state of node: %+v", err)
 			continue
 		}
-		sc.Logger.Debugf("checked state of node: %s -> %s", addr, state.Identity)
 		node.identifier = state.Identity
 		node.currentTopology = state.Current
 		sc.AddNodes(node)
 		sc.ActivateNodes(node)
-		sc.Logger.Debugf("activated node: %s -> %s", addr, state.Identity)
 	}
 	// start a goroutine to watch for changes in state of the nodes,
 	// and manage the active/inactive lists accordingly
 	go sc.watchAndUpdate()
 
 	if discover {
-		sc.Logger.Debug("starting discovery of new nodes in topology")
 		// for robustness, we will perform a discovery of associated nodes
 		// this works by pulling the topology information for given nodes
 		// and adding nodes discovered within the topology into the client
 		if err := sc.discoverNodes(); err != nil {
-			log.Errorf("failed to perform discovery of new nodes")
+			log.Printf("failed to perform discovery of new nodes")
 		}
 	}
 
@@ -170,15 +149,12 @@ func (sc *SnowthClient) isNodeActive(node *SnowthNode) bool {
 		state, err := sc.GetNodeState(node)
 		if err != nil {
 			// error means we failed, node is not active
-			sc.Logger.Warnf("unable to get the state of the node: %s", err.Error())
 			return false
 		}
-		sc.Logger.Debugf("retrieved state of node: %s -> %s", node.GetURL().Host, state.Identity)
 		id = state.Identity
 	}
 	gossip, err := sc.GetGossipInfo(node)
 	if err != nil {
-		sc.Logger.Warnf("unable to get the gossip info of the node: %s", err.Error())
 		return false
 	}
 	var age float64 = 100.0
@@ -189,7 +165,6 @@ func (sc *SnowthClient) isNodeActive(node *SnowthNode) bool {
 		}
 	}
 	if age > 10.0 {
-		sc.Logger.Warnf("gossip age expired: %s -> %d", node.GetURL().Host, age)
 		return false
 	}
 	return true
@@ -201,20 +176,15 @@ func (sc *SnowthClient) isNodeActive(node *SnowthNode) bool {
 func (sc *SnowthClient) watchAndUpdate() {
 	for {
 		<-time.After(sc.watchInterval)
-		sc.Logger.Debug("firing watch and update")
 		for _, node := range sc.ListInactiveNodes() {
-			sc.Logger.Debugf("checking node for inactive -> active: %s", node.GetURL().Host)
 			if sc.isNodeActive(node) {
 				// move to active
-				sc.Logger.Debugf("active, moving to active list: %s", node.GetURL().Host)
 				sc.ActivateNodes(node)
 			}
 		}
 		for _, node := range sc.ListActiveNodes() {
-			sc.Logger.Debugf("checking node for active -> inactive: %s", node.GetURL().Host)
 			if !sc.isNodeActive(node) {
 				// move to active
-				sc.Logger.Warnf("inactive, moving to inactive list: %s", node.GetURL().Host)
 				sc.DeactivateNodes(node)
 			}
 		}
@@ -362,17 +332,10 @@ func (sc *SnowthClient) do(node *SnowthNode, method, url string,
 	if err != nil {
 		return errors.Wrap(err, "failed to create request")
 	}
-
-	sc.Logger.Debugf("Snowth Request: %+v", r)
-
-	var start = time.Now()
 	resp, err := sc.c.Do(r)
 	if err != nil {
 		return errors.Wrap(err, "failed to perform request")
 	}
-
-	sc.Logger.Debugf("Snowth Response: %+v", resp)
-	sc.Logger.Debugf("Snowth Response Latency: %+v", time.Now().Sub(start))
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
