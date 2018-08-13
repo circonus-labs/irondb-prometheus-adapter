@@ -11,7 +11,7 @@
   branch = "master"
   name = "github.com/circonus-labs/gosnowth"
   packages = ["."]
-  revision = "cc611689775d23e1bc75f32d60957033394808c4"
+  revision = "6046d5e3508dd1ce973a17956e8b2ff58db880cf"
 
 [[projects]]
   name = "github.com/gogo/protobuf"
