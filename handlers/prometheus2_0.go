@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -245,7 +244,7 @@ func PrometheusRead2_0(ctx echo.Context) error {
 
 		start := time.Now()
 		ctx.Logger().Debugf("query: %s", snowthTagQuery.String())
-		tagResp, err = snowthClient.FindTags(node, prp.accountID, snowthTagQuery.String(), "0", strconv.FormatInt(time.Now().Unix(), 10))
+		tagResp, err = snowthClient.FindTags(node, prp.accountID, snowthTagQuery.String(), "", "")
 		ctx.Logger().Debugf("query: %s, duration: %v", snowthTagQuery.String(), time.Now().Sub(start))
 
 		if err != nil {
