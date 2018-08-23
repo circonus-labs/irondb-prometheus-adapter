@@ -8,10 +8,10 @@
   revision = "5eb751da55c6d3091faf3861ec5062ae91fee9d0"
 
 [[projects]]
-  branch = "logging"
+  branch = "master"
   name = "github.com/circonus-labs/gosnowth"
   packages = ["."]
-  revision = "dd561c666c03b9a4e7fffa9ebf04a3b02aa91964"
+  revision = "bad3b3c9e8d2b783e89530ada2e0df11ed690ab6"
 
 [[projects]]
   name = "github.com/gogo/protobuf"
@@ -212,6 +212,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "39ecaccbdf0eaa9191c5dab14a04de9ec96e24dbf3f67cc68231149bc3e3e23b"
+  inputs-digest = "55f2931a2394d8d3a1fdd7cf0dcd45430d1ed8c04f2c598845d5a3d07ce74ad5"
   solver-name = "gps-cdcl"
   solver-version = 1

@@ -41,6 +41,11 @@ func (sn *SnowthNode) GetCurrentTopology() string {
 	return sn.currentTopology
 }
 
+// httpClient - interface in order to mock http requests
+type httpClient interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+
 // SnowthClient - The client functionality for operating against SnowthNodes.
 // Operations for the client can be broken down into 6 major sections:
 //		1.) State and Topology
@@ -67,7 +72,7 @@ func (sn *SnowthNode) GetCurrentTopology() string {
 // from the nodes.
 //		6.) Lua Extensions APIs
 type SnowthClient struct {
-	c *http.Client
+	c httpClient
 
 	// in order to keep track of healthy nodes within the cluster,
 	// we have two lists of SnowthNode types, active and inactive.

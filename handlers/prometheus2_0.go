@@ -85,9 +85,14 @@ func PrometheusWrite2_0(ctx echo.Context) error {
 		err          error
 		snowthClient SnowthClientI
 	)
+
 	if client, ok := ctx.Get("snowthClient").(SnowthClientI); ok {
 		snowthClient = client
+	} else {
+		ctx.Logger().Errorf("no snowth client in context %+v\n", ctx)
+		return errors.New("no active snowth nodes")
 	}
+
 	if prp, err = extractPromRequest(ctx, req); err != nil {
 		return err
 	}
@@ -239,7 +244,7 @@ func PrometheusRead2_0(ctx echo.Context) error {
 
 		start := time.Now()
 		ctx.Logger().Debugf("query: %s", snowthTagQuery.String())
-		tagResp, err = snowthClient.FindTags(node, prp.accountID, snowthTagQuery.String())
+		tagResp, err = snowthClient.FindTags(node, prp.accountID, snowthTagQuery.String(), "", "")
 		ctx.Logger().Debugf("query: %s, duration: %v", snowthTagQuery.String(), time.Now().Sub(start))
 
 		if err != nil {
