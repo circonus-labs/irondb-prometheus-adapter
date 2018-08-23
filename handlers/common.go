@@ -10,7 +10,7 @@ import (
 
 type SnowthClientI interface {
 	WriteRaw(*gosnowth.SnowthNode, io.Reader, bool, uint64) error
-	FindTags(*gosnowth.SnowthNode, int32, string) ([]gosnowth.FindTagsItem, error)
+	FindTags(*gosnowth.SnowthNode, int32, string, string, string) ([]gosnowth.FindTagsItem, error)
 	ListActiveNodes() []*gosnowth.SnowthNode
 	ListInactiveNodes() []*gosnowth.SnowthNode
 	ReadNNTValues(*gosnowth.SnowthNode, time.Time, time.Time, int64, string, string, string) ([]gosnowth.NNTValue, error)
