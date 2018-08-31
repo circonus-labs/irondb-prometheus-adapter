@@ -31,7 +31,7 @@ func NewBuilder(initialSize int) *Builder {
 	b := &Builder{}
 	b.Bytes = make([]byte, initialSize)
 	b.head = UOffsetT(initialSize)
-	b.minalign = 1
+	b.minalign = 16
 	b.vtables = make([]UOffsetT, 0, 16) // sensible default capacity
 
 	return b
@@ -53,7 +53,7 @@ func (b *Builder) Reset() {
 	}
 
 	b.head = UOffsetT(len(b.Bytes))
-	b.minalign = 1
+	b.minalign = 16
 	b.nested = false
 	b.finished = false
 }
@@ -82,7 +82,7 @@ func (b *Builder) StartObject(numfields int) {
 	}
 
 	b.objectEnd = b.Offset()
-	b.minalign = 1
+	b.minalign = 16
 }
 
 // WriteVtable serializes the vtable for the current object, if applicable.
@@ -551,7 +551,7 @@ func (b *Builder) FinishWithFileIdentifier(rootTable UOffsetT, fid []byte) {
 	}
 	// In order to add a file identifier to the flatbuffer message, we need
 	// to prepare an alignment and file identifier length
-	b.Prep(SizeInt32+fileIdentifierLength, 0)
+	b.Prep(b.minalign, SizeInt32+fileIdentifierLength)
 	for i := fileIdentifierLength - 1; i >= 0; i-- {
 		// place the file identifier
 		b.PlaceByte(fid[i])

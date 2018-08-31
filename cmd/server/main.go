@@ -63,7 +63,7 @@ func main() {
 
 	// Routes
 	e.POST("/prometheus/2.0/write/:account/:check_uuid/:check_name", handlers.PrometheusWrite2_0)
-	e.GET("/prometheus/2.0/read/:account/:check_uuid/:check_name", handlers.PrometheusRead2_0)
+	e.POST("/prometheus/2.0/read/:account/:check_uuid/:check_name", handlers.PrometheusRead2_0)
 	e.GET("/health-check", handlers.HealthCheck)
 
 	// Start server

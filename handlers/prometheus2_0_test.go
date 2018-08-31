@@ -72,6 +72,45 @@ func TestPrometheusWrite2_0(t *testing.T) {
 func TestPrometheusRead2_0(t *testing.T) {
 	// setup echo bits
 	e := echo.New()
+
+	promMsg := prompb.ReadRequest{
+		Queries: []*prompb.Query{
+			&prompb.Query{
+				Matchers: []*prompb.LabelMatcher{
+					&prompb.LabelMatcher{
+						Type:  prompb.LabelMatcher_EQ,
+						Name:  "metric_name",
+						Value: "metric_value",
+					},
+					&prompb.LabelMatcher{
+						Type:  prompb.LabelMatcher_NEQ,
+						Name:  "metric_name",
+						Value: "metric_value",
+					},
+					&prompb.LabelMatcher{
+						Type:  prompb.LabelMatcher_RE,
+						Name:  "metric_name",
+						Value: "metric_value",
+					},
+					&prompb.LabelMatcher{
+						Type:  prompb.LabelMatcher_NRE,
+						Name:  "metric_name",
+						Value: "metric_value",
+					},
+				},
+			},
+		},
+	}
+
+	data, err := proto.Marshal(&promMsg)
+	if err != nil {
+		t.Error("failed to marshal prompb message: ", err.Error())
+	}
+	var postBody = snappy.Encode(nil, data)
+	if err != nil {
+		t.Error("failed to compress prompb message: ", err.Error())
+	}
+
 	snowthClient := new(mockSnowthClient)
 	e.Pre(func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(ctx echo.Context) error {
@@ -80,10 +119,11 @@ func TestPrometheusRead2_0(t *testing.T) {
 			return next(ctx)
 		}
 	})
-	e.GET("/prometheus/2.0/read/:account/:check_uuid/:check_name", PrometheusRead2_0)
+	e.POST("/prometheus/2.0/read/:account/:check_uuid/:check_name", PrometheusRead2_0)
 
-	url := fmt.Sprintf("/prometheus/2.0/read/42/checkname/%s", uuid.NewV4().String())
-	r, _ := http.NewRequest("GET", url, nil)
+	url := fmt.Sprintf("/prometheus/2.0/read/42/%s/check_name", uuid.NewV4().String())
+
+	r, _ := http.NewRequest("POST", url, bytes.NewBuffer(postBody))
 	w := httptest.NewRecorder()
 
 	e.ServeHTTP(w, r)

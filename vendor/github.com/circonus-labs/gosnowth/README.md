@@ -12,8 +12,8 @@ of the methods, you can use the `godoc` tool to autogenerate the documentation
 shown below:
 
 ```bash
-godoc github.com/circonus/gosnowth # plaintext
-godoc -html github.com/circonus/gosnowth # html output
+godoc github.com/circonus-labs/gosnowth # plaintext
+godoc -html github.com/circonus-labs/gosnowth # html output
 ```
 
 ## Testing
@@ -21,7 +21,7 @@ godoc -html github.com/circonus/gosnowth # html output
 In order to test this package, run the go unit tests:
 
 ```bash
-go test github.com/circonus/gosnowth # run package unit tests
+go test github.com/circonus-labs/gosnowth # run package unit tests
 ```
 
 ## Using
