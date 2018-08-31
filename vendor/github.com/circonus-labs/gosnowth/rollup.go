@@ -34,9 +34,11 @@ func (sc *SnowthClient) ReadRollupValues(
 
 	var metricBuilder strings.Builder
 	metricBuilder.WriteString(metric)
-	metricBuilder.WriteString("|ST[")
-	metricBuilder.WriteString(strings.Join(tags, ","))
-	metricBuilder.WriteString("]")
+	if len(tags) > 0 {
+		metricBuilder.WriteString("|ST[")
+		metricBuilder.WriteString(strings.Join(tags, ","))
+		metricBuilder.WriteString("]")
+	}
 
 	var (
 		r   = []RollupValues{}

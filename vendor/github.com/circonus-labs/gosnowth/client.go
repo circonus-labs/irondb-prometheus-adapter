@@ -94,9 +94,13 @@ type SnowthClient struct {
 // The discover parameter when true will allow the client to discover new
 // nodes from the topology
 func NewSnowthClient(discover bool, addrs ...string) (*SnowthClient, error) {
+	timeout := time.Duration(10 * time.Second)
+	client := &http.Client{
+		Timeout: timeout,
+	}
 
 	sc := &SnowthClient{
-		c:               http.DefaultClient,
+		c:               client,
 		activeNodesMu:   new(sync.RWMutex),
 		activeNodes:     []*SnowthNode{},
 		inactiveNodesMu: new(sync.RWMutex),
