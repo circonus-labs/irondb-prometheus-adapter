@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"regexp"
 	"strings"
 	"time"
 
@@ -252,34 +251,17 @@ func PrometheusRead2_0(ctx echo.Context) error {
 			continue
 		}
 
-		tagRE := regexp.MustCompile(`\[(.*)\]`)
-		var metricNames = map[string][]string{}
-		for _, t := range tagResp {
-
-			var metricName = ""
-			if v := strings.Split(t.MetricName, "|"); len(v) > 0 {
-				metricName = v[0]
-			}
-
-			metricTags := tagRE.FindStringSubmatch(t.MetricName)
-
-			if metricName != "" && len(metricTags) > 0 {
-				if metricName != "" {
-					metricNames[metricName] = []string{}
-				}
-				metricNames[metricName] = append(metricNames[metricName], metricTags[0])
-			}
-		}
-
-		for k, v := range metricNames {
+		for _, v := range tagResp {
 			// for all of our tag responses, grab the rollups
 			start := time.Now()
 			values, err := snowthClient.ReadRollupValues(
-				node, prp.checkUUID.String(), k, streamTags, 60*time.Second,
+				node, prp.checkUUID.String(), v.MetricName, []string{}, 60*time.Second,
 				time.Unix(0, q.StartTimestampMs*int64(time.Millisecond)),
 				time.Unix(0, q.EndTimestampMs*int64(time.Millisecond)),
 			)
-			ctx.Logger().Debugf("rollup query: %s, result length: %d, duration: %v", strings.Join(v, ","), len(values), time.Now().Sub(start))
+
+			ctx.Logger().Debugf("rollup query: %s, result length: %d, duration: %v", v.MetricName, len(values), time.Now().Sub(start))
+			ctx.Logger().Debugf("rollup results: %+v", values)
 			if err != nil {
 				ctx.Logger().Errorf("failed to read rollup: %s", err.Error())
 				continue
@@ -313,6 +295,7 @@ func PrometheusRead2_0(ctx echo.Context) error {
 	}
 
 	ctx.Logger().Debugf("total read duration: %v", time.Now().Sub(start))
+	ctx.Logger().Debugf("results: ", resp)
 
 	data, err := proto.Marshal(resp)
 	if err != nil {
