@@ -98,8 +98,7 @@
 [[projects]]
   name = "github.com/prometheus/prometheus"
   packages = ["prompb"]
-  revision = "bc6058c81272a8d938c05e75607371284236aadc"
-  version = "v2.2.1"
+  version = "v2.4.1"
 
 [[projects]]
   name = "github.com/satori/go.uuid"

@@ -22,6 +22,10 @@ var (
 	commitID string
 	// buildTime is populated at compile time with -ldflags '-X ...
 	buildTime string
+	// read off
+	readOff bool
+	// write off
+	writeOff bool
 )
 
 // init - main init function which is used to parse the command line flags
@@ -29,11 +33,15 @@ func init() {
 	flag.StringVar(&addr, "addr", ":8080", "Address for adapter to listen")
 	flag.Var(&appLogLevel, "log", "Log level for adapter")
 	flag.Var(&snowths, "snowth", "Snowth node to bootstrap")
+	flag.BoolVar(&readOff, "readOff", false, "Turn read endpoint off")
+	flag.BoolVar(&writeOff, "writeOff", false, "Turn write endpoint off")
 	flag.Parse()
 
 	log.Printf("addr flag: %s", addr)
 	log.Printf("log flag: %s", appLogLevel)
 	log.Printf("snowth flag: %+v", snowths)
+	log.Printf("readOff flag: %+v", readOff)
+	log.Printf("writeOff flag: %+v", writeOff)
 }
 
 // main - main entrypoint for irondb-prometheus-adapter application
@@ -62,8 +70,12 @@ func main() {
 	})
 
 	// Routes
-	e.POST("/prometheus/2.0/write/:account/:check_uuid/:check_name", handlers.PrometheusWrite2_0)
-	e.POST("/prometheus/2.0/read/:account/:check_uuid/:check_name", handlers.PrometheusRead2_0)
+	if !writeOff {
+		e.POST("/prometheus/2.0/write/:account/:check_uuid/:check_name", handlers.PrometheusWrite2_0)
+	}
+	if !readOff {
+		e.POST("/prometheus/2.0/read/:account/:check_uuid/:check_name", handlers.PrometheusRead2_0)
+	}
 	e.GET("/health-check", handlers.HealthCheck)
 
 	// Start server

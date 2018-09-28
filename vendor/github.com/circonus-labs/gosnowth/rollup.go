@@ -43,9 +43,9 @@ func (sc *SnowthClient) ReadRollupValues(
 	var (
 		r   = []RollupValues{}
 		err = sc.do(node, "GET", fmt.Sprintf(
-			"%s?start_ts=%d&end_ts=%d&rollup_span=%ds",
+			"%s?start_ts=%d&end_ts=%d&rollup_span=%dms",
 			path.Join("/rollup", id, url.QueryEscape(metricBuilder.String())), start_ts, end_ts,
-			int(rollup/time.Second)), nil, &r, decodeJSONFromResponse)
+			int(rollup/time.Millisecond)), nil, &r, decodeJSONFromResponse)
 	)
 	return r, err
 }

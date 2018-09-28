@@ -1,20 +1,11 @@
 package handlers
 
 import (
-	"bytes"
 	"fmt"
-	"net/http"
-	"net/http/httptest"
 	"testing"
-	"time"
-
-	"github.com/gogo/protobuf/proto"
-	"github.com/golang/snappy"
-	"github.com/labstack/echo"
-	"github.com/prometheus/prometheus/prompb"
-	uuid "github.com/satori/go.uuid"
 )
 
+/*
 func TestPrometheusWrite2_0(t *testing.T) {
 	// setup echo bits
 	e := echo.New()
@@ -131,5 +122,13 @@ func TestPrometheusRead2_0(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Errorf("failure in write request: %s %d\n", w.Body.String(), w.Code)
 	}
+
+}
+*/
+func TestMetricNameToLabelPairs(t *testing.T) {
+
+	metricName := `up|ST[cmdb_shard:test,cmdb_status:ALLOCATED,data_center:dal06,environment:prod,instance:prometheus-test-000-g5.prod.dal06.fitbit.com:9201,job:prometheus-remote-storage,monitor:test,replica:prometheus-test-000-g5.prod.dal06.fitbit.com,tier:prometheus]`
+
+	fmt.Printf("%+v\n", metricNameToLabelPairs(metricName))
 
 }
