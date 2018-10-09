@@ -190,7 +190,10 @@ func PrometheusRead2_0(ctx echo.Context) error {
 			streamTags     = []string{}
 		)
 
-		snowthTagQuery.WriteString("and(")
+		// always include the check_uuid in the tag query, will reduce search space
+		snowthTagQuery.WriteString("and(__check_uuid:")
+		snowthTagQuery.WriteString(prp.checkUUID.String())
+		snowthTagQuery.WriteString(",")
 		for i, m := range q.GetMatchers() {
 			// for each of the matchers within the query
 			// take each matcher and formulate a stream tag filter
@@ -300,8 +303,7 @@ func PrometheusRead2_0(ctx echo.Context) error {
 			}()
 		}
 
-		for range tagResp {
-			timeSeries := <-tsChan
+		for timeSeries := range tsChan {
 			ctx.Logger().Warnf("time series added to resultset, #samples: %d", len(timeSeries.Samples))
 			qr.Timeseries = append(qr.Timeseries, timeSeries)
 		}
