@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -25,6 +26,7 @@ type promRequestParams struct {
 }
 
 func extractPromRequest(ctx echo.Context, req proto.Message) (promRequestParams, error) {
+	fullstart := time.Now()
 	var (
 		// create our prometheus format decoder
 		err error
@@ -54,23 +56,30 @@ func extractPromRequest(ctx echo.Context, req proto.Message) (promRequestParams,
 	}
 	defer ctx.Request().Body.Close()
 
+	start := time.Now()
 	// pull the body off of the request into a byte slice
 	compressed, err := ioutil.ReadAll(ctx.Request().Body)
 	if err != nil {
 		ctx.Logger().Errorf("failed to read request body: %s", err.Error())
 		return prp, echo.NewHTTPError(http.StatusBadRequest, "could not read request body")
 	}
+	ctx.Logger().Warnf("timing - read request body: %+v", time.Now().Sub(start))
 
+	start = time.Now()
 	reqBuf, err := snappy.Decode(nil, compressed)
 	if err != nil {
 		ctx.Logger().Errorf("failed to decompress request body: %s", err.Error())
 		return prp, echo.NewHTTPError(http.StatusBadRequest, "failed to decode request body")
 	}
+	ctx.Logger().Warnf("timing - snappy decode: %+v", time.Now().Sub(start))
 
+	start = time.Now()
 	if err := proto.Unmarshal(reqBuf, req); err != nil {
 		ctx.Logger().Errorf("failed to decode protobuf request: %s", err.Error())
 		return prp, echo.NewHTTPError(http.StatusBadRequest, "failed to decode request body")
 	}
+	ctx.Logger().Warnf("timing - read protobuf: %+v", time.Now().Sub(start))
+	ctx.Logger().Warnf("timing - extract prom request: %+v", time.Now().Sub(fullstart))
 	return prp, nil
 }
 
@@ -169,7 +178,7 @@ func PrometheusRead2_0(ctx echo.Context) error {
 	// perform the tags snowth query
 	// take all resulting metrics, and perform a time bound metrics query
 	// convert the results into the response
-	ctx.Logger().Debugf("prometheus query: %+v", req.GetQueries())
+	ctx.Logger().Warnf("prometheus query: %+v", req.GetQueries())
 
 	start = time.Now()
 	for _, q := range req.GetQueries() {
@@ -179,10 +188,12 @@ func PrometheusRead2_0(ctx echo.Context) error {
 			qr             = new(prompb.QueryResult)
 			snowthTagQuery strings.Builder
 			streamTags     = []string{}
-			responseTags   = map[string]string{}
 		)
 
-		snowthTagQuery.WriteString("and(")
+		// always include the check_uuid in the tag query, will reduce search space
+		snowthTagQuery.WriteString("and(__check_uuid:")
+		snowthTagQuery.WriteString(prp.checkUUID.String())
+		snowthTagQuery.WriteString(",")
 		for i, m := range q.GetMatchers() {
 			// for each of the matchers within the query
 			// take each matcher and formulate a stream tag filter
@@ -204,8 +215,6 @@ func PrometheusRead2_0(ctx echo.Context) error {
 				matcherValue = base64.StdEncoding.EncodeToString(
 					[]byte(value))
 			)
-
-			responseTags[m.GetName()] = m.GetValue()
 
 			// based on the matcher type, we need to build out our tag query
 			switch m.Type {
@@ -242,61 +251,71 @@ func PrometheusRead2_0(ctx echo.Context) error {
 		)
 
 		start := time.Now()
-		ctx.Logger().Debugf("query: %s", snowthTagQuery.String())
+		ctx.Logger().Warnf("timing find query: %s", snowthTagQuery.String())
 		tagResp, err = snowthClient.FindTags(node, prp.accountID, snowthTagQuery.String(), "", "")
-		ctx.Logger().Debugf("query: %s, duration: %v", snowthTagQuery.String(), time.Now().Sub(start))
+		ctx.Logger().Warnf("timing find query: %s, duration: %v", snowthTagQuery.String(), time.Now().Sub(start))
 
 		if err != nil {
 			ctx.Logger().Errorf("failed to find tags: %s", err.Error())
 			continue
 		}
 
+		ctx.Logger().Warnf("doing %d rollups for query: %s", len(tagResp), snowthTagQuery.String())
+
+		var tsChan = make(chan *prompb.TimeSeries, 100)
+
+		var step = 60 * time.Second
+		if q.Hints.StepMs > 0 {
+			step = time.Duration(q.Hints.StepMs) * time.Millisecond
+		}
+
 		for _, v := range tagResp {
-			// for all of our tag responses, grab the rollups
-			start := time.Now()
-			values, err := snowthClient.ReadRollupValues(
-				node, prp.checkUUID.String(), v.MetricName, []string{}, 60*time.Second,
-				time.Unix(0, q.StartTimestampMs*int64(time.Millisecond)),
-				time.Unix(0, q.EndTimestampMs*int64(time.Millisecond)),
-			)
+			go func() {
+				// for all of our tag responses, grab the rollups
+				start := time.Now()
+				values, err := snowthClient.ReadRollupValues(
+					node, prp.checkUUID.String(), v.MetricName, []string{}, step,
+					time.Unix(0, q.StartTimestampMs*int64(time.Millisecond)),
+					time.Unix(0, q.EndTimestampMs*int64(time.Millisecond)),
+				)
 
-			ctx.Logger().Debugf("rollup query: %s, result length: %d, duration: %v", v.MetricName, len(values), time.Now().Sub(start))
-			ctx.Logger().Debugf("rollup results: %+v", values)
-			if err != nil {
-				ctx.Logger().Errorf("failed to read rollup: %s", err.Error())
-				continue
-			}
+				ctx.Logger().Warnf("timing rollup query: %s, result length: %d, duration: %v", v.MetricName, len(values), time.Now().Sub(start))
+				ctx.Logger().Debugf("rollup results: %+v", values)
+				timeSeries := new(prompb.TimeSeries)
+				if err != nil {
+					ctx.Logger().Errorf("failed to read rollup: %s", err.Error())
+					tsChan <- timeSeries
+					return
+				}
 
-			timeSeries := new(prompb.TimeSeries)
-			labelPairs := []*prompb.Label{}
+				timeSeries.Labels = metricNameToLabelPairs(v.MetricName)
 
-			for k, v := range responseTags {
-				labelPairs = append(labelPairs, &prompb.Label{
-					Name:  k,
-					Value: v,
-				})
-			}
-			timeSeries.Labels = labelPairs
+				for _, v := range values {
+					// convert value to time series
+					timeSeries.Samples = append(timeSeries.Samples,
+						&prompb.Sample{
+							Value:     v.Value,
+							Timestamp: v.Timestamp * 1000, // prom does ms
+						})
+				}
+				// add the timeseries to the query result
+				tsChan <- timeSeries
+			}()
+		}
 
-			for _, v := range values {
-				// convert value to time series
-				timeSeries.Samples = append(timeSeries.Samples,
-					&prompb.Sample{
-						Value:     v.Value,
-						Timestamp: v.Timestamp,
-					})
-			}
-			// add the timeseries to the query result
+		for timeSeries := range tsChan {
+			ctx.Logger().Warnf("time series added to resultset, #samples: %d", len(timeSeries.Samples))
 			qr.Timeseries = append(qr.Timeseries, timeSeries)
-
 		}
 		// add this result to our results
 		resp.Results = append(resp.Results, qr)
 	}
+	ctx.Logger().Warnf("total results, #query-resp: %d", len(resp.Results))
 
-	ctx.Logger().Debugf("total read duration: %v", time.Now().Sub(start))
+	ctx.Logger().Warnf("total read duration: %v", time.Now().Sub(start))
 	ctx.Logger().Debugf("results: ", resp)
 
+	start = time.Now()
 	data, err := proto.Marshal(resp)
 	if err != nil {
 		ctx.Logger().Errorf("failed to marshal response: %s", err.Error())
@@ -312,5 +331,41 @@ func PrometheusRead2_0(ctx echo.Context) error {
 		ctx.Logger().Errorf("failed to write response: %s", err.Error())
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to write response")
 	}
+	ctx.Logger().Warnf("total read handler timing: %v", time.Now().Sub(start))
 	return nil
+}
+
+var canonicalMetricNameRE = regexp.MustCompile(`^(.+)\|ST\[(.+)\]$`)
+
+func metricNameToLabelPairs(metricName string) []*prompb.Label {
+	// up|ST[cmdb_shard:test,cmdb_status:ALLOCATED,data_center:dal06,environment:prod,instance:prometheus-test-000-g5.prod.dal06.fitbit.com:9201,job:prometheus-remote-storage,monitor:test,replica:prometheus-test-000-g5.prod.dal06.fitbit.com,tier:prometheus]
+	if !canonicalMetricNameRE.MatchString(metricName) {
+		return []*prompb.Label{
+			&prompb.Label{Name: "__name__", Value: metricName},
+		}
+	}
+	metricNameParts := canonicalMetricNameRE.FindAllStringSubmatch(metricName, -1)
+	if len(metricNameParts) < 1 || len(metricNameParts[0]) < 3 {
+		return []*prompb.Label{
+			&prompb.Label{
+				Name: "__name__", Value: metricName,
+			},
+		}
+	}
+
+	labelPairs := []*prompb.Label{
+		&prompb.Label{
+			Name: "__name__", Value: metricNameParts[0][1],
+		},
+	}
+
+	for _, v := range strings.Split(metricNameParts[0][2], ",") {
+		vv := strings.Split(v, ":")
+		if len(vv) > 1 {
+			labelPairs = append(labelPairs, &prompb.Label{
+				Name: vv[0], Value: strings.Join(vv[1:], ":"),
+			})
+		}
+	}
+	return labelPairs
 }
