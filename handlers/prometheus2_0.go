@@ -273,12 +273,22 @@ func PrometheusRead2_0(ctx echo.Context) error {
 
 		for _, v := range tagResp {
 			go func() {
+				// if end is less than start, we will request start+1time span
+				var (
+					startTS = q.StartTimestampMs
+					endTS   = q.EndTimestampMs
+				)
+
+				if startTS > endTS {
+					endTS = startTS + int64(step)
+				}
+
 				// for all of our tag responses, grab the rollups
 				start := time.Now()
 				values, err := snowthClient.ReadRollupValues(
 					node, prp.checkUUID.String(), v.MetricName, []string{}, step,
-					time.Unix(0, q.StartTimestampMs*int64(time.Millisecond)),
-					time.Unix(0, q.EndTimestampMs*int64(time.Millisecond)),
+					time.Unix(0, startTS*int64(time.Millisecond)),
+					time.Unix(0, endTS*int64(time.Millisecond)),
 				)
 
 				ctx.Logger().Warnf("timing rollup query: %s, result length: %d, duration: %v", v.MetricName, len(values), time.Now().Sub(start))
@@ -340,7 +350,7 @@ func PrometheusRead2_0(ctx echo.Context) error {
 var canonicalMetricNameRE = regexp.MustCompile(`^(.+)\|ST\[(.+)\]$`)
 
 func metricNameToLabelPairs(metricName string) []*prompb.Label {
-	// up|ST[cmdb_shard:test,cmdb_status:ALLOCATED,data_center:dal06,environment:prod,instance:prometheus-test-000-g5.prod.dal06.fitbit.com:9201,job:prometheus-remote-storage,monitor:test,replica:prometheus-test-000-g5.prod.dal06.fitbit.com,tier:prometheus]
+	// up|ST[cmdb_shard:test,cmdb_status:ALLOCATED,data_center:dal06,environment:prod,instance:prometheus-test-000-g5.prod.dal06:9201,job:prometheus-remote-storage,monitor:test,replica:prometheus-test-000-g5.prod.dal06.,tier:prometheus]
 	if !canonicalMetricNameRE.MatchString(metricName) {
 		return []*prompb.Label{
 			&prompb.Label{Name: "__name__", Value: metricName},

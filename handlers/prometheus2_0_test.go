@@ -127,7 +127,7 @@ func TestPrometheusRead2_0(t *testing.T) {
 */
 func TestMetricNameToLabelPairs(t *testing.T) {
 
-	metricName := `up|ST[cmdb_shard:test,cmdb_status:ALLOCATED,data_center:dal06,environment:prod,instance:prometheus-test-000-g5.prod.dal06.fitbit.com:9201,job:prometheus-remote-storage,monitor:test,replica:prometheus-test-000-g5.prod.dal06.fitbit.com,tier:prometheus]`
+	metricName := `up|ST[cmdb_shard:test,cmdb_status:ALLOCATED,data_center:dal06,environment:prod,instance:prometheus-test-000-g5.prod.dal06.:9201,job:prometheus-remote-storage,monitor:test,replica:prometheus-test-000-g5.prod.dal06,tier:prometheus]`
 
 	fmt.Printf("%+v\n", metricNameToLabelPairs(metricName))
 
