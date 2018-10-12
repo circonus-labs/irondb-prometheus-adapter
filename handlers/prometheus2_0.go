@@ -265,8 +265,10 @@ func PrometheusRead2_0(ctx echo.Context) error {
 		var tsChan = make(chan *prompb.TimeSeries, 100)
 
 		var step = 60 * time.Second
-		if q.Hints.StepMs > 0 {
-			step = time.Duration(q.Hints.StepMs) * time.Millisecond
+		if q.Hints != nil {
+			if q.Hints.StepMs > 0 {
+				step = time.Duration(q.Hints.StepMs) * time.Millisecond
+			}
 		}
 
 		for _, v := range tagResp {
