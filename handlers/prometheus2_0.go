@@ -280,7 +280,10 @@ func PrometheusRead2_0(ctx echo.Context) error {
 				)
 
 				if startTS > endTS {
+					ctx.Logger().Debugf("start time (%+v) is greater than end time (%+v)", startTS, endTS)
 					endTS = startTS + int64(step)
+				} else {
+					ctx.Logger().Debugf("start time (%+v) is less than end time (%+v)", startTS, endTS)
 				}
 
 				// for all of our tag responses, grab the rollups
