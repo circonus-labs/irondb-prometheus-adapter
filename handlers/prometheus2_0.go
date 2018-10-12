@@ -275,23 +275,26 @@ func PrometheusRead2_0(ctx echo.Context) error {
 			go func() {
 				// if end is less than start, we will request start+1time span
 				var (
-					startTS = q.StartTimestampMs
-					endTS   = q.EndTimestampMs
+					startTSNano = q.StartTimestampMs * int64(time.Millisecond)
+					endTSNano   = q.EndTimestampMs * int64(time.Millisecond)
 				)
 
-				if startTS > endTS {
-					ctx.Logger().Debugf("start time (%+v) is greater than end time (%+v)", startTS, endTS)
-					endTS = startTS + int64(step)
-				} else {
-					ctx.Logger().Debugf("start time (%+v) is less than end time (%+v)", startTS, endTS)
+				if startTSNano < 0 {
+					startTSNano = int64(time.Now().UnixNano() / int64(time.Millisecond))
+					endTSNano = startTSNano + int64(step)
+				}
+
+				if startTSNano > endTSNano {
+					ctx.Logger().Debugf("start time (%+v) is greater than end time (%+v)", startTSNano, endTSNano)
+					endTSNano = startTSNano + int64(step)
 				}
 
 				// for all of our tag responses, grab the rollups
 				start := time.Now()
 				values, err := snowthClient.ReadRollupValues(
 					node, prp.checkUUID.String(), v.MetricName, []string{}, step,
-					time.Unix(0, startTS*int64(time.Millisecond)),
-					time.Unix(0, endTS*int64(time.Millisecond)),
+					time.Unix(0, startTSNano),
+					time.Unix(0, startTSNano),
 				)
 
 				ctx.Logger().Warnf("timing rollup query: %s, result length: %d, duration: %v", v.MetricName, len(values), time.Now().Sub(start))
