@@ -1,4 +1,7 @@
 GO=$(shell which go)
+ifeq "$(GO)" ""
+$(error Please install Go to compile)
+endif
 DOCKER=$(shell which docker)
 COMMIT_ID=$(shell git rev-parse HEAD)
 NOW=$(shell date +%s)

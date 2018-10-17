@@ -2,9 +2,20 @@
 
 Prometheus Adapter to IRONdb.
 
-Requiress IRONdb `>= v0.12.0`.
+Requires IRONdb `>= v0.12.0`.
+Requires Go `>= 1.10`.
 
 Also check out our launch [blog post](https://www.circonus.com/2018/06/prometheus-adapter/)!
+
+## Docker Image Pull
+
+You can now install the irondb-prometheus-adapter container image from dockerhub
+with the below command:
+
+```bash
+docker pull irondb/irondb-prometheus-adapter
+docker run -p1234:8080 docker.io/irondb/irondb-prometheus-adapter:latest /irondb-prometheus-adapter -addr :1234 -log debug -snowth http:127.0.0.1:8112
+```
 
 ## Build
 
@@ -60,7 +71,7 @@ There are three endpoints currently:
 
 ```
 POST /prometheus/2.0/write/:account/:check_uuid/:check_name
-GET /prometheus/2.0/read/:account/:check_uuid/:check_name
+POST /prometheus/2.0/read/:account/:check_uuid/:check_name
 GET /health-check
 ```
 
