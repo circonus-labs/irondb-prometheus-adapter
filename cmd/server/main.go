@@ -49,7 +49,7 @@ func main() {
 	// startup our gosnowth client
 	snowthClient, err := gosnowth.NewSnowthClient(false, snowths...)
 	if err != nil {
-		log.Fatalf("failed to start snowth client: %s", err.Error())
+		panic(fmt.Sprintf("failed to start snowth client: %s", err.Error()))
 	}
 
 	e := echo.New()
