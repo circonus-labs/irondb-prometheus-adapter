@@ -3,6 +3,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 
 	"github.com/circonus-labs/gosnowth"
 	"github.com/circonus-labs/irondb-prometheus-adapter/handlers"
