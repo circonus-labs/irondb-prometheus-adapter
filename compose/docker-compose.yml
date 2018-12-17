@@ -1,0 +1,33 @@
+version: '3'
+services:
+  irondb:
+    image: "irondb/irondb:0.14.8"
+    ports:
+      - "8112:8112"
+      - "8113:8113"
+    networks:
+      - irondb
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8112/state"]
+      interval: 1m30s
+      timeout: 10s
+      retries: 3
+      #start_period: 40s
+  irondb_prometheus_adapter:
+    image: "irondb/irondb-prometheus-adapter:latest"
+    networks:
+      - irondb
+    ports:
+      - "8080:8080"
+    depends_on:
+      - irondb
+    command: /irondb-prometheus-adapter -snowth http://irondb:8112
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health-check"]
+      interval: 1m30s
+      timeout: 10s
+      retries: 3
+      #start_period: 40s
+
+networks:
+  irondb:
