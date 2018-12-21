@@ -28,6 +28,22 @@ services:
       timeout: 10s
       retries: 3
       #start_period: 40s
+  grafana:
+    image: "irondb/grafana:latest"
+    networks:
+      - irondb
+    ports:
+      - "3000:3000"
+    depends_on:
+      - irondb
+    environment:
+      - "GF_SECURITY_ADMIN_PASSWORD=irondb"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+      interval: 1m30s
+      timeout: 10s
+      retries: 3
+      #start_period: 40s
 
 networks:
   irondb:
