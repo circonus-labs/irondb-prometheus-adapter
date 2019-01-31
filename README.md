@@ -14,7 +14,7 @@ with the below command:
 
 ```bash
 docker pull irondb/irondb-prometheus-adapter
-docker run -p1234:8080 docker.io/irondb/irondb-prometheus-adapter:latest /irondb-prometheus-adapter -addr :1234 -log debug -snowth http:127.0.0.1:8112
+docker run -p1234:8080 docker.io/irondb/irondb-prometheus-adapter:latest /irondb-prometheus-adapter -addr :1234 -log debug -snowth http://127.0.0.1:8112
 ```
 
 ## Build

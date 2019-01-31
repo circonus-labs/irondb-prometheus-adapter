@@ -128,6 +128,7 @@ func NewSnowthClient(discover bool, addrs ...string) (*SnowthClient, error) {
 	// of that node, and populate the identifier and topology of that
 	// node.  Finally we will add the node and activate it.
 	sc.Logger.Info("initializing snowth client")
+	numActiveNodes := 0
 	for _, addr := range addrs {
 		url, err := url.Parse(addr)
 		if err != nil {
@@ -150,7 +151,13 @@ func NewSnowthClient(discover bool, addrs ...string) (*SnowthClient, error) {
 		sc.AddNodes(node)
 		sc.ActivateNodes(node)
 		sc.Logger.Debugf("activated node: %s -> %s", addr, state.Identity)
+		numActiveNodes++
 	}
+
+	if numActiveNodes == 0 {
+		return nil, errors.New("No snowth nodes could be activated")
+	}
+
 	// start a goroutine to watch for changes in state of the nodes,
 	// and manage the active/inactive lists accordingly
 	go sc.watchAndUpdate()
