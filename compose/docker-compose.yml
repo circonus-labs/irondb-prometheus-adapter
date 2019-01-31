@@ -37,7 +37,7 @@ services:
     depends_on:
       - irondb
     environment:
-      - "GF_SECURITY_ADMIN_PASSWORD=irondb"
+      - "GF_SECURITY_ADMIN_PASSWORD=admin"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/"]
       interval: 1m30s

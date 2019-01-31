@@ -6,7 +6,7 @@ directly through an exposed HTTP API documented in the IRONdb API documentation:
 
 https://github.com/circonus/irondb-docs/blob/master/api.md
 
-Each of the documented APIs are being implemented at methods of the SnowthClient
+Each of the documented APIs are being implemented as methods of the SnowthClient
 structure defined in this repository.  In order to see the documentation of each
 of the methods, you can use the `godoc` tool to autogenerate the documentation
 shown below:

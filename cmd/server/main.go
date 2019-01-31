@@ -3,6 +3,7 @@ package main
 
 import (
 	"flag"
+	"time"
 
 	"github.com/circonus-labs/gosnowth"
 	"github.com/circonus-labs/irondb-prometheus-adapter/handlers"
@@ -47,9 +48,22 @@ func init() {
 // main - main entrypoint for irondb-prometheus-adapter application
 func main() {
 	// startup our gosnowth client
-	snowthClient, err := gosnowth.NewSnowthClient(false, snowths...)
+	// if no snowth nodes are available, sleep and loop until they are (1000 times max)
+	// avoids the race condition where adapter is started w/ no snowth nodes available
+	var snowthClient *gosnowth.SnowthClient
+	var err error
+	maxRetries := 1000
+	for i := 0; i < maxRetries; i++ {
+		if snowthClient, err = gosnowth.NewSnowthClient(false, snowths...); err == nil {
+			break
+		}
+
+		log.Printf("No IRONdb nodes available on attempt %d, trying again in 10 seconds: %s", i+1, err.Error())
+		time.Sleep(10 * time.Second)
+	}
+
 	if err != nil {
-		panic(fmt.Sprintf("failed to start snowth client: %s", err.Error()))
+		log.Fatalf("Failed to make connection to IRONdb after %d attempts, last error: %v", maxRetries+1, err.Error())
 	}
 
 	e := echo.New()
