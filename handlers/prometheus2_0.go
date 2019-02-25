@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/circonus-labs/gosnowth"
@@ -269,8 +270,11 @@ func PrometheusRead2_0(ctx echo.Context) error {
 			step = time.Duration(q.Hints.StepMs) * time.Millisecond
 		}
 
+		var wg sync.WaitGroup
 		for _, v := range tagResp {
+			wg.Add(1)
 			go func() {
+				defer wg.Done()
 				// for all of our tag responses, grab the rollups
 				start := time.Now()
 				values, err := snowthClient.ReadRollupValues(
@@ -279,7 +283,9 @@ func PrometheusRead2_0(ctx echo.Context) error {
 					time.Unix(0, q.EndTimestampMs*int64(time.Millisecond)),
 				)
 
-				ctx.Logger().Warnf("timing rollup query: %s, result length: %d, duration: %v", v.MetricName, len(values), time.Now().Sub(start))
+				ctx.Logger().Warnf("timing rollup query: %s, %s, %d, %d, %d, result length: %d, duration: %v",
+					prp.checkUUID.String(), v.MetricName, int64(step), q.StartTimestampMs*int64(time.Millisecond),
+					q.EndTimestampMs*int64(time.Millisecond), len(values), time.Now().Sub(start))
 				ctx.Logger().Debugf("rollup results: %+v", values)
 				timeSeries := new(prompb.TimeSeries)
 				if err != nil {
@@ -302,6 +308,11 @@ func PrometheusRead2_0(ctx echo.Context) error {
 				tsChan <- timeSeries
 			}()
 		}
+
+		go func() {
+			wg.Wait()
+			close(tsChan)
+		}()
 
 		for timeSeries := range tsChan {
 			ctx.Logger().Warnf("time series added to resultset, #samples: %d", len(timeSeries.Samples))
