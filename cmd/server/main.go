@@ -14,7 +14,7 @@ import (
 
 var (
 	// the application log level command line flag `-log`
-	appLogLevel logLevel
+	appLogLevel = logLevel(log.ERROR)
 	// the application listen address command line flag `-addr`
 	addr string
 	// the snowth address command line flags `-snowth`
