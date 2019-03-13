@@ -21,7 +21,7 @@ services:
       - "8080:8080"
     depends_on:
       - irondb
-    command: /irondb-prometheus-adapter -snowth http://irondb:8112
+    command: -snowth http://irondb:8112
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health-check"]
       interval: 1m30s
