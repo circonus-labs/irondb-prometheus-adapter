@@ -14,7 +14,7 @@ with the below command:
 
 ```bash
 docker pull irondb/irondb-prometheus-adapter
-docker run -p1234:8080 docker.io/irondb/irondb-prometheus-adapter:latest /irondb-prometheus-adapter -addr :1234 -log debug -snowth http://127.0.0.1:8112
+docker run -p1234:8080 irondb/irondb-prometheus-adapter:latest -addr :1234 -log debug -snowth http://127.0.0.1:8112
 ```
 
 ## Build
@@ -36,7 +36,7 @@ After building, you can run in two ways, directly or through docker:
 ```bash
 docker run -d -p8080:8080 irondb-prometheus-adapter:<commit_id>
 # the above will run irondb-prometheus-adapter in a container
-docker run -p1234:8080 irondb-prometheus-adapter:860a64f4e9d793beaef25196e36a35da1480d88b /irondb-prometheus-adapter -addr :1234 -log debug -snowth http:127.0.0.1:8112
+docker run -p1234:8080 irondb-prometheus-adapter:860a64f4e9d793beaef25196e36a35da1480d88b -addr :1234 -log debug -snowth http:127.0.0.1:8112
 # the above shows an example of specifying custom command with non-default args
 
 ./irondb-prometheus-adapter
