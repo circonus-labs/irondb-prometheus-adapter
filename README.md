@@ -1,3 +1,7 @@
+## IRONdb release `0.15.3` includes native prometheus support
+
+The irondb-prometheus-adapter is deprecated by native IRONdb support.  Users are encouraged to switch to native ingestion which has improved performance.  This adapter will receive minimal support going forward.
+
 # irondb-prometheus-adapter
 
 Prometheus Adapter to IRONdb.
